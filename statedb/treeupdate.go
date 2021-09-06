@@ -3,6 +3,7 @@ package statedb
 import (
 	"path"
 
+	"github.com/vocdoni/arbo"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/tree"
 )
@@ -48,7 +49,7 @@ type TreeUpdate struct {
 	// corresponding parent leafs up to the mainTree.
 	openSubs map[string]*TreeUpdate
 	// cfg points to this TreeUpdate configuration.
-	cfg *treeConfig
+	cfg *TreeConfig
 }
 
 // Get returns the value at key in this tree.  `key` is the path of the leaf,
@@ -57,9 +58,22 @@ func (u *TreeUpdate) Get(key []byte) ([]byte, error) {
 	return u.tree.Get(u.tree.tx, key)
 }
 
-// Iterate iterates over all nodes of this tree.
-func (u *TreeUpdate) Iterate(callback func(key, value []byte) bool) error {
+// IterateNodes iterates over all nodes of this tree.  The key and value are
+// the Arbo database representation of a node, and don't match the key value
+// used in Get, Add and Set.
+func (u *TreeUpdate) IterateNodes(callback func(key, value []byte) bool) error {
 	return u.tree.Iterate(u.tree.tx, callback)
+}
+
+// Iterate iterates over all leafs of this tree.
+func (u *TreeUpdate) Iterate(callback func(key, value []byte) bool) error {
+	return u.tree.Iterate(u.tree.tx, func(key, value []byte) bool {
+		if value[0] != arbo.PrefixValueLeaf {
+			return false
+		}
+		leafK, leafV := arbo.ReadLeafValue(value)
+		return callback(leafK, leafV)
+	})
 }
 
 // Root returns the root of the tree, which cryptographically summarises the
@@ -106,12 +120,11 @@ func (u *TreeUpdate) Set(key, value []byte) error {
 	return u.tree.Set(u.tree.tx, key, value)
 }
 
-// subTree is an internal function used to open the subTree (singleton and
-// non-singleton) as a TreeUpdate.  The treeUpdate.tx is created from
-// u.tx appending the prefix `subKeySubTree | cfg.prefix`.  In turn
-// the treeUpdate.tree uses the db.WriteTx from treeUpdate.tx appending the
-// prefix `'/' | subKeyTree`.
-func (u *TreeUpdate) subTree(cfg *treeConfig) (treeUpdate *TreeUpdate, err error) {
+// SubTree is used to open the subTree (singleton and non-singleton) as a
+// TreeUpdate.  The treeUpdate.tx is created from u.tx appending the prefix
+// `subKeySubTree | cfg.prefix`.  In turn the treeUpdate.tree uses the
+// db.WriteTx from treeUpdate.tx appending the prefix `'/' | subKeyTree`.
+func (u *TreeUpdate) SubTree(cfg *TreeConfig) (treeUpdate *TreeUpdate, err error) {
 	if treeUpdate, ok := u.openSubs[string(cfg.prefix)]; ok {
 		return treeUpdate, nil
 	}
@@ -140,16 +153,78 @@ func (u *TreeUpdate) subTree(cfg *treeConfig) (treeUpdate *TreeUpdate, err error
 	return treeUpdate, nil
 }
 
-// SubTreeSingle returns a TreeUpdate of a singleton SubTree whose root is stored
-// in the leaf with `cfg.Key()`, and is parametrized by `cfg`.
-func (u *TreeUpdate) SubTreeSingle(cfg *SubTreeSingleConfig) (*TreeUpdate, error) {
-	return u.subTree(cfg.treeConfig())
+// DeepSubTree allows opening a nested subTree by passing the list of tree
+// configurations.
+func (u *TreeUpdate) DeepSubTree(cfgs []*TreeConfig) (treeUpdate *TreeUpdate, err error) {
+	tree := u
+	for _, cfg := range cfgs {
+		if tree, err = tree.SubTree(cfg); err != nil {
+			return nil, err
+		}
+	}
+	return tree, nil
 }
 
-// SubTree returns a TreeUpdate of a non-singleton SubTree whose root is stored
-// in the leaf with `key`, and is parametrized by `cfg`.
-func (u *TreeUpdate) SubTree(key []byte, cfg *SubTreeConfig) (*TreeUpdate, error) {
-	return u.subTree(cfg.treeConfig(key))
+// DeepGet allows performing a Get on a nested subTree by passing the list
+// of tree configurations and the key to get at the last subTree.
+func (u *TreeUpdate) DeepGet(cfgs []*TreeConfig, key []byte) ([]byte, error) {
+	tree, err := u.DeepSubTree(cfgs)
+	if err != nil {
+		return nil, err
+	}
+	return tree.Get(key)
+}
+
+// DeepAdd allows performing an Add on a nested subTree by passing the list
+// of tree configurations and the key, value to add on the last subTree.
+func (u *TreeUpdate) DeepAdd(cfgs []*TreeConfig, key, value []byte) error {
+	tree, err := u.DeepSubTree(cfgs)
+	if err != nil {
+		return err
+	}
+	return tree.Add(key, value)
+}
+
+// DeepSet allows performing a Set on a nested subTree by passing the list
+// of tree configurations and the key, value to set on the last subTree.
+func (u *TreeUpdate) DeepSet(cfgs []*TreeConfig, key, value []byte) error {
+	tree, err := u.DeepSubTree(cfgs)
+	if err != nil {
+		return err
+	}
+	return tree.Set(key, value)
+}
+
+// AsTreeView returns a read-only view of this subTree that fulfills the
+// TreeViewer interface.
+func (u *TreeUpdate) AsTreeView() TreeViewer {
+	return &treeUpdateView{u}
+}
+
+// treeUpdateView is a wrapper over TreeUpdate that fulfills the TreeViewer
+// interface.
+type treeUpdateView struct {
+	*TreeUpdate
+}
+
+// verify that treeUpdateView fulfills the TreeViewer interface.
+var _ TreeViewer = (*treeUpdateView)(nil)
+
+// NoState implements the TreViewer.NoState method.
+func (v *treeUpdateView) NoState() Viewer {
+	return v.TreeUpdate.NoState()
+}
+
+// SubTree implements the TreViewer.SubTree method.
+func (v *treeUpdateView) SubTree(c *TreeConfig) (TreeViewer, error) {
+	tu, err := v.TreeUpdate.SubTree(c)
+	return &treeUpdateView{tu}, err
+}
+
+// DeepSubTree implements the TreViewer.DeepSubTree method.
+func (v *treeUpdateView) DeepSubTree(cfgs []*TreeConfig) (TreeViewer, error) {
+	tu, err := v.TreeUpdate.DeepSubTree(cfgs)
+	return &treeUpdateView{tu}, err
 }
 
 // TreeTx is a wrapper over TreeUpdate that includes the Commit and Discard
