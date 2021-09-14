@@ -13,6 +13,16 @@ import (
 
 var emptyVotesRoot = make([]byte, VotesCfg.HashFunc().Len())
 
+// NOTE(Edu):  Should we allow this function to overide a process?  I have
+// checked calls to AddProcess and it seems it's only called via AddTx in the
+// case of Tx_NewProcess.  In that same function, before calling AddProcess,
+// NewProcessTxCheck is called, which returns error if the process exists, so
+// for a Tx_NewProcess the processID is expected to not exist.  If there are no
+// cases where AddProcess is supposed to overide an existing process, I think
+// we should update AddProcess and call DeepAdd instead of DeepSet (which will
+// return an error if the process already exists), and also allows us to make
+// other assumptions (like certain fields of a process won't be modified
+// later).
 // AddProcess adds or overides a new process to vochain
 func (v *State) AddProcess(p *models.Process) error {
 	newProcessBytes, err := proto.Marshal(
@@ -22,6 +32,17 @@ func (v *State) AddProcess(p *models.Process) error {
 	}
 	v.Lock()
 	err = v.Tx.DeepSet(p.ProcessId, newProcessBytes, ProcessesCfg)
+	// TODO: [B] If Mode.PreRegister && EnvelopeType.Anonymous open a new
+	// VoteTree at p.ProcessId of type CensusPoseidonCfg.  The key is
+	// sequential index, the value is the key.  To store the mapping
+	// between index and key, use the NoState database in the censusTree.
+	// TODO: Store a mapping of p.StartBlock -> append([]processID,
+	// p.ProcessId) at mainTree.NoState().  To encode the list of
+	// processesID for a StartBlock, a new protobuf model is required.  See
+	// OracleList for example.  I think this list will not require
+	// deletions, but if deletions are needed the protobuf model could use
+	// a map<bytes, bool>, a map used as a set where the key is the
+	// proceessID.
 	v.Unlock()
 	if err != nil {
 		return err
@@ -356,6 +377,8 @@ func NewProcessTxCheck(vtx *models.Tx, txBytes,
 	if err == nil {
 		return nil, fmt.Errorf("process with id (%x) already exists", tx.Process.ProcessId)
 	}
+
+	// TODO: [B] Mode.PreRegister && EnvelopeType.Anonymous is valid
 
 	// check valid/implemented process types
 	switch {

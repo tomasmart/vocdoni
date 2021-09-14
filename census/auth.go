@@ -1,5 +1,6 @@
 package census
 
+/*
 import (
 	"encoding/hex"
 	"errors"
@@ -47,6 +48,9 @@ func (m *Manager) CheckAuth(reqOuter *api.RequestMessage, reqInner *api.MetaRequ
 
 	// Check signature with existing namespace keys
 	log.Debugf("namespace keys %s", ns.Keys)
+	// NOTE(Edu): If I understand this correctly, if a Census doesn't have
+	// any Key, it means that anyone can do authorized operations on this
+	// census?  What are those operations?  This feels dangerous to me!
 	if len(ns.Keys) > 0 {
 		if len(ns.Keys) == 1 && len(ns.Keys[0]) < ethereum.PubKeyLengthBytes*2 {
 			log.Warnf("namespace %s does not have management public key configured, allowing all", ns.Name)
@@ -75,3 +79,4 @@ func (m *Manager) CheckAuth(reqOuter *api.RequestMessage, reqInner *api.MetaRequ
 	}
 	return nil
 }
+*/
