@@ -39,6 +39,7 @@ func NewVochain(vochaincfg *config.VochainCfg, genesis []byte) *BaseApplication 
 	if err := app.Node.Start(); err != nil {
 		log.Fatal(err)
 	}
+	// TODO: Call app.LoadZkVks()
 	// Set mempool function for removing transactions.
 	app.State.mempoolRemoveTxKeys = func(keys [][32]byte, removeFromCache bool) {
 		mp := app.Node.Mempool().(*mempl.CListMempool)

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -176,6 +177,7 @@ type EventListener interface {
 	OnProcessKeys(pid []byte, encryptionPub string, txIndex int32)
 	OnRevealKeys(pid []byte, encryptionPriv string, txIndex int32)
 	OnProcessResults(pid []byte, results *models.ProcessResult, txIndex int32) error
+	OnProcessesStart(pids [][]byte)
 	Commit(height uint32) (err error)
 	Rollback()
 }
@@ -706,6 +708,56 @@ func (v *State) EnvelopeList(processID []byte, from, listSize int,
 	return nullifiers
 }
 
+// pathProcessIDsByStartBlock is the db path used to store ProcessIDs indexed
+// by their StartBlock.
+const pathProcessIDsByStartBlock = "pidByStartBlock"
+
+// keyProcessIDsByStartBlock returns the db key where ProcessesIDs with
+// startBlock are stored.
+func keyProcessIDsByStartBlock(startBlock uint32) []byte {
+	key := make([]byte, 4)
+	binary.LittleEndian.PutUint32(key, startBlock)
+	return []byte(path.Join(pathProcessIDsByStartBlock, string(key)))
+}
+
+// processIDsByStartBlock returns the ProcessIDs of processes with startBlock.
+func (v *State) processIDsByStartBlock(startBlock uint32) ([][]byte, error) {
+	noState := v.Tx.NoState()
+	pidsBytes, err := noState.Get(keyProcessIDsByStartBlock(startBlock))
+	if err == db.ErrKeyNotFound {
+		return [][]byte{}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	var pids models.ProcessIdList
+	if err := proto.Unmarshal(pidsBytes, &pids); err != nil {
+		return nil, fmt.Errorf("cannot proto.Unmarshal pids: %w", err)
+	}
+	return pids.ProcessIds, nil
+}
+
+// setProcessIDByStartBlock indexes the processIDs to by its processes
+// startBlock.
+func (v *State) setProcessIDByStartBlock(processID []byte, startBlock uint32) error {
+	noState := v.Tx.NoState()
+	var pids models.ProcessIdList
+	if pidsBytes, err := noState.Get(keyProcessIDsByStartBlock(startBlock)); err == db.ErrKeyNotFound {
+		// no pids indexed by startBlock, so we build upon an empty pids
+	} else if err != nil {
+		return err
+	} else {
+		if err := proto.Unmarshal(pidsBytes, &pids); err != nil {
+			return fmt.Errorf("cannot proto.Unmarshal pids: %w", err)
+		}
+	}
+	pids.ProcessIds = append(pids.ProcessIds, processID)
+	pidsBytes, err := proto.Marshal(&pids)
+	if err != nil {
+		return err
+	}
+	return noState.Set(keyProcessIDsByStartBlock(startBlock), pidsBytes)
+}
+
 // Save persistent save of vochain mem trees
 func (v *State) Save() ([]byte, error) {
 	height := v.CurrentHeight()
@@ -737,6 +789,12 @@ func (v *State) Save() ([]byte, error) {
 			log.Warnf("event callback error on commit: %v", err)
 		}
 	}
+	// TODO: Figure out a way to notify via event the fact that a process
+	// startBlock == height.  For example, keep a persistent map of
+	// startBlock -> []processID, and query it and call
+	// l.ProcessStartBlock([]processID).  Or via the commit, if the
+	// listener has a list of processes indexed by startBlock (in
+	// persistent storage), that works too.
 	return v.Store.Hash()
 }
 

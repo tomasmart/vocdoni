@@ -12,6 +12,7 @@ import (
 // AddToRollingCensus adds a new key to an existing rolling census.
 // If census does not exist yet it will be created.
 func (s *State) AddToRollingCensus(pid []byte, key []byte, weight *big.Int) error {
+	// TODO: [C] Insert key into subTree ProcessesCfg - (pid) -> CensusPoseidonCfg
 	/*
 		// In the state we only store the last census root (as value) using key as index
 		s.Lock()
@@ -58,6 +59,7 @@ func RegisterKeyTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State)
 		return fmt.Errorf("process %x malformed", tx.ProcessId)
 	}
 	if state.CurrentHeight() >= process.StartBlock {
+		// TODO: [C] Check that process.Mode.PreRegister && process.EnvelopeType.Anonymous
 		return fmt.Errorf("process %x already started", tx.ProcessId)
 	}
 	if process.Status != models.ProcessStatus_READY {
@@ -69,7 +71,7 @@ func RegisterKeyTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State)
 	if signature == nil {
 		return fmt.Errorf("signature missing on voteTx")
 	}
-	if len(tx.NewKey) < 32 { // TODO: check the correctnes of the new public key
+	if len(tx.NewKey) < 32 { // TODO: [C] check the correctnes of the new public key
 		return fmt.Errorf("newKey wrong size")
 	}
 

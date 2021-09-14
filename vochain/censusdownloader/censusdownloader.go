@@ -78,7 +78,7 @@ func (c *CensusDownloader) OnProcess(pid, eid []byte, censusRoot, censusURI stri
 	}
 }
 
-// NOT USED but required for implementing the interface
+// NOT USED but required for implementing the vochain.EventListener interface
 func (c *CensusDownloader) OnCancel(pid []byte, txindex int32)                  {}
 func (c *CensusDownloader) OnVote(v *models.Vote, txindex int32)                {}
 func (c *CensusDownloader) OnNewTx(blockHeight uint32, txIndex int32)           {}
@@ -92,3 +92,5 @@ func (c *CensusDownloader) OnProcessResults(pid []byte,
 	results *models.ProcessResult, txindex int32) error {
 	return nil
 }
+
+func (s *CensusDownloader) OnProcessesStart(pids [][]byte) {}

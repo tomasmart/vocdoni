@@ -14,6 +14,18 @@ import (
 
 var emptyVotesRoot = make([]byte, VotesCfg.HashFunc().Len())
 
+// NOTE(Edu):  Should we allow this function to overide a process?  I have
+// checked calls to AddProcess and it seems it's only called via AddTx in the
+// case of Tx_NewProcess.  In that same function, before calling AddProcess,
+// NewProcessTxCheck is called, which returns error if the process exists, so
+// for a Tx_NewProcess the processID is expected to not exist.  If there are no
+// cases where AddProcess is supposed to overide an existing process, I think
+// we should update AddProcess and call DeepAdd instead of DeepSet (which will
+// return an error if the process already exists), and also allows us to make
+// other assumptions (like certain fields of a process won't be modified
+// later).
+// NOTE(Edu):  I have updated this funtion assuming that only new processes are
+// added and never modified via this funciton.
 // AddProcess adds or overides a new process to vochain
 func (v *State) AddProcess(p *models.Process) error {
 	newProcessBytes, err := proto.Marshal(
@@ -22,7 +34,24 @@ func (v *State) AddProcess(p *models.Process) error {
 		return fmt.Errorf("cannot marshal process bytes: %w", err)
 	}
 	v.Tx.Lock()
-	err = v.Tx.DeepSet(p.ProcessId, newProcessBytes, ProcessesCfg)
+	err = func() error {
+		fmt.Printf("DBG before DeepAdd\n")
+		if err := v.Tx.DeepAdd(p.ProcessId, newProcessBytes, ProcessesCfg); err != nil {
+			fmt.Printf("DBG after DeepAdd\n")
+			return err
+		}
+		// If Mode.PreRegister && EnvelopeType.Anonymous we create (by
+		// opening) a new empty poseidon census tree at p.ProcessId.
+		// TODO: The key is sequential index, the value is the key.  To
+		// store the mapping between index and key, use the NoState
+		// database in the censusTree.
+		if p.Mode.PreRegister && p.EnvelopeType.Anonymous {
+			if _, err := v.Tx.DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(p.ProcessId)); err != nil {
+				return err
+			}
+		}
+		return v.setProcessIDByStartBlock(p.ProcessId, p.StartBlock)
+	}()
 	v.Tx.Unlock()
 	if err != nil {
 		return err
@@ -363,10 +392,13 @@ func NewProcessTxCheck(vtx *models.Tx, txBytes,
 	}
 
 	// check valid/implemented process types
-	switch {
-	case tx.Process.EnvelopeType.Anonymous:
-		return nil, fmt.Errorf("anonymous process not yet implemented")
-	case tx.Process.EnvelopeType.Serial:
+	// pre-regiser and anonymous must be either both enabled or disabled, as
+	// we only support a single scenario of pre-register + anonymous.
+	if tx.Process.Mode.PreRegister != tx.Process.Mode.PreRegister {
+		return nil, fmt.Errorf("pre-register mode only supported " +
+			"with anonymous envelope type and viceversa")
+	}
+	if tx.Process.EnvelopeType.Serial {
 		return nil, fmt.Errorf("serial process not yet implemented")
 	}
 

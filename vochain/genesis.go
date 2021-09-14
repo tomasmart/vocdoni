@@ -8,6 +8,11 @@ import (
 	"go.vocdoni.io/dvote/log"
 )
 
+// TODO: Add new field with circuit artifacts hashes of zkcensusproof.
+// Example: A slice where each index corresponds to a different parameter set.
+// Each element in the slice contains the hash of `circuit.zkey`,
+// `verificationKey.json` and `witness.wasm`, and a description of the
+// parameters of that build.
 type VochainGenesis struct {
 	AutoUpdateGenesis bool
 	SeedNodes         []string
