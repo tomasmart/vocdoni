@@ -171,6 +171,7 @@ type EventListener interface {
 	OnProcessKeys(pid []byte, encryptionPub, commitment string, txIndex int32)
 	OnRevealKeys(pid []byte, encryptionPriv, reveal string, txIndex int32)
 	OnProcessResults(pid []byte, results *models.ProcessResult, txIndex int32) error
+	// TODO: Add OnProcessStart(pids [][]byte)
 	Commit(height uint32) (err error)
 	Rollback()
 }
@@ -683,6 +684,9 @@ func (v *State) EnvelopeList(processID []byte, from, listSize int,
 	return nullifiers
 }
 
+// TODO: Add a funciton called SetHeader that is called in app.go where `app.State.Tx.Set(headerKey, headerBytes)`
+// Query height -> list of process ID that will start, and call listeners OnProcessStart.
+
 // Header returns the blockchain last block committed height
 func (v *State) Header(isQuery bool) *models.TendermintHeader {
 	v.RLock()
@@ -730,6 +734,12 @@ func (v *State) Save() ([]byte, error) {
 		}
 	}
 	atomic.StoreUint32(&v.height, height)
+	// TODO: Figure out a way to notify via event the fact that a process
+	// startBlock == height.  For example, keep a persistent map of
+	// startBlock -> []processID, and query it and call
+	// l.ProcessStartBlock([]processID).  Or via the commit, if the
+	// listener has a list of processes indexed by startBlock (in
+	// persistent storage), that works too.
 	return v.Store.Hash()
 }
 
