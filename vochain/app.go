@@ -59,11 +59,17 @@ func NewBaseApplication(dbpath string) (*BaseApplication, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot create vochain state: (%s)", err)
 	}
+	// TODO: Download circuit artifacts, and check hashes against genesis.
 	return &BaseApplication{
 		State:      state,
 		blockCache: lru.NewAtomic(128),
 	}, nil
 }
+
+// TODO: Implement app.LoadZkVks which downloads the verification keys of all
+// circuits set in the genesis from the url passed via vochaincfg, stores them
+// in a path set by vochaincfg, and checks the hashes agains the genesis zk
+// artifacts field.
 
 func (app *BaseApplication) SetNode(vochaincfg *config.VochainCfg, genesis []byte) error {
 	var err error
@@ -273,19 +279,6 @@ func (app *BaseApplication) InitChain(req abcitypes.RequestInitChain) abcitypes.
 		}
 	}
 
-	var header models.TendermintHeader
-	header.Height = 0
-	header.AppHash = []byte{}
-	header.ChainId = req.ChainId
-	headerBytes, err := proto.Marshal(&header)
-	if err != nil {
-		log.Fatalf("cannot marshal header: %s", err)
-	}
-	app.State.Tx.Lock()
-	if err := app.State.Tx.Set(headerKey, headerBytes); err != nil {
-		log.Fatal(err)
-	}
-	app.State.Tx.Unlock()
 	// Is this save needed?
 	if _, err := app.State.Save(); err != nil {
 		log.Fatalf("cannot save state: %s", err)

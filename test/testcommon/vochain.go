@@ -103,11 +103,16 @@ var (
 	}
 )
 
-func NewVochainStateWithOracles(tb testing.TB) *vochain.State {
+func NewVochainState(tb testing.TB) *vochain.State {
 	s, err := vochain.NewState(tb.TempDir())
 	if err != nil {
 		tb.Fatal(err)
 	}
+	return s
+}
+
+func NewVochainStateWithOracles(tb testing.TB) *vochain.State {
+	s := NewVochainState(tb)
 	for _, o := range OracleListHardcoded {
 		if err := s.AddOracle(o); err != nil {
 			tb.Fatal(err)
@@ -117,10 +122,7 @@ func NewVochainStateWithOracles(tb testing.TB) *vochain.State {
 }
 
 func NewVochainStateWithValidators(tb testing.TB) *vochain.State {
-	s, err := vochain.NewState(tb.TempDir())
-	if err != nil {
-		tb.Fatal(err)
-	}
+	s := NewVochainState(tb)
 	vals := make([]*privval.FilePV, 2)
 	rint := rand.Int()
 	vals[0] = privval.GenFilePV("/tmp/"+strconv.Itoa(rint), "/tmp/"+strconv.Itoa(rint))
@@ -151,10 +153,7 @@ func NewVochainStateWithValidators(tb testing.TB) *vochain.State {
 }
 
 func NewVochainStateWithProcess(tb testing.TB) *vochain.State {
-	s, err := vochain.NewState(tb.TempDir())
-	if err != nil {
-		tb.Fatal(err)
-	}
+	s := NewVochainState(tb)
 	// add process
 	processBytes, err := proto.Marshal(StateDBProcessHardcoded)
 	if err != nil {
