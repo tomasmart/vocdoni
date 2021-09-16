@@ -108,7 +108,8 @@ func TestGetValidators(t *testing.T) {
 func TestAddProcess(t *testing.T) {
 	t.Parallel()
 
-	s := testcommon.NewVochainStateWithProcess(t)
+	s := testcommon.NewVochainState(t)
+	fmt.Printf("DBG before AddProcess\n")
 	err := s.AddProcess(testcommon.ProcessHardcoded)
 	qt.Assert(t, err, qt.IsNil)
 }
