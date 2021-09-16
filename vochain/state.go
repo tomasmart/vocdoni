@@ -3,8 +3,10 @@ package vochain
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -684,8 +686,56 @@ func (v *State) EnvelopeList(processID []byte, from, listSize int,
 	return nullifiers
 }
 
+const pathProcessIDsByStartBlock = "pidByStartBlock"
+
+func pathProcessIDs(startBlock uint32) []byte {
+	key := make([]byte, 4)
+	binary.LittleEndian.PutUint32(key, startBlock)
+	return []byte(path.Join(pathProcessIDsByStartBlock, string(key)))
+}
+
+func (v *State) processIDsByStartBlock(startBlock uint32) ([][]byte, error) {
+	noState := v.Tx.NoState()
+	pidsBytes, err := noState.Get(pathProcessIDs(startBlock))
+	if err != nil {
+		return nil, err
+	}
+	var pids models.ProcessIdList
+	if err := proto.Unmarshal(pidsBytes, &pids); err != nil {
+		return nil, fmt.Errorf("cannot proto.Unmarshal pids: %w", err)
+	}
+	return pids.ProcessIds, nil
+}
+
+func (v *State) setProcessIDByStartBlock(processID []byte, startBlock uint32) error {
+	noState := v.Tx.NoState()
+	pidsBytes, err := noState.Get(pathProcessIDs(startBlock))
+	if err != nil {
+		return err
+	}
+	var pids models.ProcessIdList
+	if err := proto.Unmarshal(pidsBytes, &pids); err != nil {
+		return fmt.Errorf("cannot proto.Unmarshal pids: %w", err)
+	}
+	pids.ProcessIds = append(pids.ProcessIds, processID)
+	if pidsBytes, err = proto.Marshal(&pids); err != nil {
+		return err
+	}
+	return noState.Set(pathProcessIDs(startBlock), pidsBytes)
+}
+
 // TODO: Add a funciton called SetHeader that is called in app.go where `app.State.Tx.Set(headerKey, headerBytes)`
 // Query height -> list of process ID that will start, and call listeners OnProcessStart.
+func (v *State) SetHeader(header *models.TendermintHeader) error {
+	headerBytes, err := proto.Marshal(header)
+	if err != nil {
+		return fmt.Errorf("cannot marshal header: %w", err)
+	}
+	v.Lock()
+	err = v.Tx.Set(headerKey, headerBytes)
+	v.Unlock()
+	return err
+}
 
 // Header returns the blockchain last block committed height
 func (v *State) Header(isQuery bool) *models.TendermintHeader {
