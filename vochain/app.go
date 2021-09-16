@@ -264,15 +264,9 @@ func (app *BaseApplication) InitChain(req abcitypes.RequestInitChain) abcitypes.
 	header.Height = 0
 	header.AppHash = []byte{}
 	header.ChainId = req.ChainId
-	headerBytes, err := proto.Marshal(&header)
-	if err != nil {
-		log.Fatalf("cannot marshal header: %s", err)
-	}
-	app.State.Lock()
-	if err := app.State.Tx.Set(headerKey, headerBytes); err != nil {
+	if err := app.State.SetHeader(&header); err != nil {
 		log.Fatal(err)
 	}
-	app.State.Unlock()
 	// Is this save needed?
 	if _, err := app.State.Save(); err != nil {
 		log.Fatalf("cannot save state: %s", err)
@@ -297,17 +291,11 @@ func (app *BaseApplication) BeginBlock(
 		LastCommitHash: req.Header.GetLastCommitHash(),
 		Timestamp:      req.Header.GetTime().Unix(),
 	}
-	headerBytes, err := proto.Marshal(header)
-	if err != nil {
-		log.Warnf("cannot marshal header in BeginBlock")
-	}
 	// reset app state to latest persistent data
 	app.State.Rollback()
-	app.State.Lock()
-	if err = app.State.Tx.Set(headerKey, headerBytes); err != nil {
+	if err := app.State.SetHeader(header); err != nil {
 		log.Fatal(err)
 	}
-	app.State.Unlock()
 	go app.State.CachePurge(uint32(header.Height))
 
 	return abcitypes.ResponseBeginBlock{}
