@@ -172,11 +172,11 @@ func VoteTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State,
 	}
 
 	var vote *models.Vote
-	switch {
-	case process.EnvelopeType.Anonymous:
+	if process.EnvelopeType.Anonymous {
 		// TODO check snark
 		return nil, fmt.Errorf("snark vote not implemented")
-	default: // Signature based voting
+	} else {
+		// Signature based voting
 		if signature == nil {
 			return nil, fmt.Errorf("signature missing on voteTx")
 		}

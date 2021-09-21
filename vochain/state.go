@@ -17,6 +17,7 @@ import (
 	ed25519 "github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/vocdoni/arbo"
 	"go.vocdoni.io/dvote/crypto/ethereum"
+	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/db/badgerdb"
 	"go.vocdoni.io/dvote/log"
 	"go.vocdoni.io/dvote/statedb"
@@ -174,7 +175,7 @@ type EventListener interface {
 	OnProcessKeys(pid []byte, encryptionPub, commitment string, txIndex int32)
 	OnRevealKeys(pid []byte, encryptionPriv, reveal string, txIndex int32)
 	OnProcessResults(pid []byte, results *models.ProcessResult, txIndex int32) error
-	// TODO: Add OnProcessStart(pids [][]byte)
+	OnProcessesStart(pids [][]byte)
 	Commit(height uint32) (err error)
 	Rollback()
 }
@@ -666,18 +667,25 @@ func (v *State) EnvelopeList(processID []byte, from, listSize int,
 	return nullifiers
 }
 
+// pathProcessIDsByStartBlock is the db path used to store ProcessIDs indexed
+// by their StartBlock.
 const pathProcessIDsByStartBlock = "pidByStartBlock"
 
-func pathProcessIDs(startBlock uint32) []byte {
+// keyProcessIDsByStartBlock returns the db key where ProcessesIDs with
+// startBlock are stored.
+func keyProcessIDsByStartBlock(startBlock uint32) []byte {
 	key := make([]byte, 4)
 	binary.LittleEndian.PutUint32(key, startBlock)
 	return []byte(path.Join(pathProcessIDsByStartBlock, string(key)))
 }
 
+// processIDsByStartBlock returns the ProcessIDs of processes with startBlock.
 func (v *State) processIDsByStartBlock(startBlock uint32) ([][]byte, error) {
 	noState := v.Tx.NoState()
-	pidsBytes, err := noState.Get(pathProcessIDs(startBlock))
-	if err != nil {
+	pidsBytes, err := noState.Get(keyProcessIDsByStartBlock(startBlock))
+	if err == db.ErrKeyNotFound {
+		return [][]byte{}, nil
+	} else if err != nil {
 		return nil, err
 	}
 	var pids models.ProcessIdList
@@ -687,34 +695,55 @@ func (v *State) processIDsByStartBlock(startBlock uint32) ([][]byte, error) {
 	return pids.ProcessIds, nil
 }
 
+// setProcessIDByStartBlock indexes the processIDs to by its processes
+// startBlock.
 func (v *State) setProcessIDByStartBlock(processID []byte, startBlock uint32) error {
 	noState := v.Tx.NoState()
-	pidsBytes, err := noState.Get(pathProcessIDs(startBlock))
+	var pids models.ProcessIdList
+	if pidsBytes, err := noState.Get(keyProcessIDsByStartBlock(startBlock)); err == db.ErrKeyNotFound {
+		// no pids indexed by startBlock, so we build upon an empty pids
+	} else if err != nil {
+		return err
+	} else {
+		if err := proto.Unmarshal(pidsBytes, &pids); err != nil {
+			return fmt.Errorf("cannot proto.Unmarshal pids: %w", err)
+		}
+	}
+	pids.ProcessIds = append(pids.ProcessIds, processID)
+	pidsBytes, err := proto.Marshal(&pids)
 	if err != nil {
 		return err
 	}
-	var pids models.ProcessIdList
-	if err := proto.Unmarshal(pidsBytes, &pids); err != nil {
-		return fmt.Errorf("cannot proto.Unmarshal pids: %w", err)
-	}
-	pids.ProcessIds = append(pids.ProcessIds, processID)
-	if pidsBytes, err = proto.Marshal(&pids); err != nil {
-		return err
-	}
-	return noState.Set(pathProcessIDs(startBlock), pidsBytes)
+	return noState.Set(keyProcessIDsByStartBlock(startBlock), pidsBytes)
 }
 
-// TODO: Add a funciton called SetHeader that is called in app.go where `app.State.Tx.Set(headerKey, headerBytes)`
-// Query height -> list of process ID that will start, and call listeners OnProcessStart.
+// SetHeader stores the tendermint header in the state.  If in the new block
+// (identified by header.Height) a new processes start, notify the event
+// listeners via the OnProcessesStart callback.
 func (v *State) SetHeader(header *models.TendermintHeader) error {
 	headerBytes, err := proto.Marshal(header)
 	if err != nil {
 		return fmt.Errorf("cannot marshal header: %w", err)
 	}
+	var pidsStart [][]byte
 	v.Lock()
-	err = v.Tx.Set(headerKey, headerBytes)
+	err = func() error {
+		if err := v.Tx.Set(headerKey, headerBytes); err != nil {
+			return err
+		}
+		pidsStart, err = v.processIDsByStartBlock(uint32(header.GetHeight()))
+		return err
+	}()
 	v.Unlock()
-	return err
+	if err != nil {
+		return err
+	}
+	if len(pidsStart) > 0 {
+		for _, l := range v.eventListeners {
+			l.OnProcessesStart(pidsStart)
+		}
+	}
+	return nil
 }
 
 // Header returns the blockchain last block committed height

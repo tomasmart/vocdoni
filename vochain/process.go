@@ -23,6 +23,8 @@ var emptyVotesRoot = make([]byte, VotesCfg.HashFunc().Len())
 // return an error if the process already exists), and also allows us to make
 // other assumptions (like certain fields of a process won't be modified
 // later).
+// NOTE(Edu):  I have updated this funtion assuming that only new processes are
+// added and never modified via this funciton.
 // AddProcess adds or overides a new process to vochain
 func (v *State) AddProcess(p *models.Process) error {
 	newProcessBytes, err := proto.Marshal(
@@ -31,18 +33,24 @@ func (v *State) AddProcess(p *models.Process) error {
 		return fmt.Errorf("cannot marshal process bytes: %w", err)
 	}
 	v.Lock()
-	err = v.Tx.DeepSet(p.ProcessId, newProcessBytes, ProcessesCfg)
-	// TODO: [B] If Mode.PreRegister && EnvelopeType.Anonymous open a new
-	// VoteTree at p.ProcessId of type CensusPoseidonCfg.  The key is
-	// sequential index, the value is the key.  To store the mapping
-	// between index and key, use the NoState database in the censusTree.
-	// TODO: Store a mapping of p.StartBlock -> append([]processID,
-	// p.ProcessId) at mainTree.NoState().  To encode the list of
-	// processesID for a StartBlock, a new protobuf model is required.  See
-	// OracleList for example.  I think this list will not require
-	// deletions, but if deletions are needed the protobuf model could use
-	// a map<bytes, bool>, a map used as a set where the key is the
-	// proceessID.
+	err = func() error {
+		fmt.Printf("DBG before DeepAdd\n")
+		if err := v.Tx.DeepAdd(p.ProcessId, newProcessBytes, ProcessesCfg); err != nil {
+			fmt.Printf("DBG after DeepAdd\n")
+			return err
+		}
+		// If Mode.PreRegister && EnvelopeType.Anonymous we create (by
+		// opening) a new empty poseidon census tree at p.ProcessId.
+		// TODO: The key is sequential index, the value is the key.  To
+		// store the mapping between index and key, use the NoState
+		// database in the censusTree.
+		if p.Mode.PreRegister && p.EnvelopeType.Anonymous {
+			if _, err := v.Tx.DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(p.ProcessId)); err != nil {
+				return err
+			}
+		}
+		return v.setProcessIDByStartBlock(p.ProcessId, p.StartBlock)
+	}()
 	v.Unlock()
 	if err != nil {
 		return err
@@ -378,13 +386,14 @@ func NewProcessTxCheck(vtx *models.Tx, txBytes,
 		return nil, fmt.Errorf("process with id (%x) already exists", tx.Process.ProcessId)
 	}
 
-	// TODO: [B] Mode.PreRegister && EnvelopeType.Anonymous is valid
-
 	// check valid/implemented process types
-	switch {
-	case tx.Process.EnvelopeType.Anonymous:
-		return nil, fmt.Errorf("anonymous process not yet implemented")
-	case tx.Process.EnvelopeType.Serial:
+	// pre-regiser and anonymous must be either both enabled or disabled, as
+	// we only support a single scenario of pre-register + anonymous.
+	if tx.Process.Mode.PreRegister != tx.Process.Mode.PreRegister {
+		return nil, fmt.Errorf("pre-register mode only supported " +
+			"with anonymous envelope type and viceversa")
+	}
+	if tx.Process.EnvelopeType.Serial {
 		return nil, fmt.Errorf("serial process not yet implemented")
 	}
 

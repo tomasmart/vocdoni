@@ -302,6 +302,9 @@ func (k *KeyKeeper) OnProcessResults(pid []byte,
 	return nil
 }
 
+// OnProcessesStart does nothing
+func (k *KeyKeeper) OnProcessesStart(pids [][]byte) {}
+
 // Generate Keys generates a set of encryption/commitment keys for a process.
 // Encryption private key = hash(signer.privKey + processId + keyIndex).
 // Reveal key is hashPoseidon(key).

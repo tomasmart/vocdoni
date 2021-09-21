@@ -1,6 +1,7 @@
 package statedb
 
 import (
+	"fmt"
 	"path"
 
 	"go.vocdoni.io/dvote/db"
@@ -104,6 +105,7 @@ func (u *TreeUpdate) NoState() Updater {
 // `value` is the content of the leaf.
 func (u *TreeUpdate) Add(key, value []byte) error {
 	u.dirtyTree = true
+	fmt.Printf("DBG Add %x %x\n", key, value)
 	return u.tree.Add(u.tree.tx, key, value)
 }
 
@@ -111,6 +113,7 @@ func (u *TreeUpdate) Add(key, value []byte) error {
 // leaf, and `value` is the content of the leaf.
 func (u *TreeUpdate) Set(key, value []byte) error {
 	u.dirtyTree = true
+	fmt.Printf("DBG Set %x %x\n", key, value)
 	return u.tree.Set(u.tree.tx, key, value)
 }
 
