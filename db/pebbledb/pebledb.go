@@ -2,6 +2,8 @@ package pebbledb
 
 import (
 	"os"
+	"sync/atomic"
+	"time"
 
 	"github.com/cockroachdb/pebble"
 	"go.vocdoni.io/dvote/db"
@@ -71,8 +73,6 @@ func (tx WriteTx) Delete(k []byte) error {
 
 // Commit implements the db.WriteTx.Commit interface method
 func (tx WriteTx) Commit() error {
-	log.Infof("database commit, current disk space: %d MiB", tx.db.Metrics().DiskSpaceUsage()/1048576)
-	log.Infof("%+v", tx.db.Metrics().Total())
 	return tx.batch.Commit(nil)
 }
 
@@ -83,7 +83,8 @@ func (tx WriteTx) Discard() {
 
 // PebbleDB implements db.Database interface
 type PebbleDB struct {
-	db *pebble.DB
+	db     *pebble.DB
+	closed int32
 }
 
 // check that PebbleDB implements the db.Database interface
@@ -100,9 +101,27 @@ func New(opts db.Options) (*PebbleDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PebbleDB{
+	pdb := &PebbleDB{
 		db: db,
-	}, nil
+	}
+	go Compactor(pdb)
+	return pdb, nil
+
+}
+
+func Compactor(db *PebbleDB) {
+	for {
+		time.Sleep(time.Minute * 2)
+		if atomic.LoadInt32(&db.closed) > 0 {
+			return
+		}
+		startTime := time.Now()
+		if err := db.db.Compact([]byte{0x00}, []byte{0xff}); err != nil {
+			log.Warn(err)
+		}
+		log.Infof("database compacted, took %s", time.Since(startTime))
+		log.Infof("%+v", db.db.Metrics().Total())
+	}
 }
 
 // ReadTx returns a db.ReadTx
@@ -123,6 +142,7 @@ func (db *PebbleDB) WriteTx() db.WriteTx {
 
 // Close closes the PebbleDB
 func (db *PebbleDB) Close() error {
+	atomic.AddInt32(&db.closed, 1)
 	return db.db.Close()
 }
 
