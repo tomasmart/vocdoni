@@ -5,11 +5,13 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"go.vocdoni.io/dvote/db"
+	"go.vocdoni.io/dvote/log"
 )
 
 // ReadTx implements the interface db.ReadTx
 type ReadTx struct {
 	batch *pebble.Batch
+	db    *pebble.DB
 }
 
 // check that ReadTx implements the db.ReadTx interface
@@ -18,6 +20,7 @@ var _ db.ReadTx = (*ReadTx)(nil)
 // WriteTx implements the interface db.WriteTx
 type WriteTx struct {
 	batch *pebble.Batch
+	db    *pebble.DB
 }
 
 // check that WriteTx implements the db.ReadTx & db.WriteTx interfaces
@@ -68,6 +71,8 @@ func (tx WriteTx) Delete(k []byte) error {
 
 // Commit implements the db.WriteTx.Commit interface method
 func (tx WriteTx) Commit() error {
+	log.Infof("database commit, current disk space: %d MiB", tx.db.Metrics().DiskSpaceUsage()/1048576)
+	log.Infof("%+v", tx.db.Metrics().Total())
 	return tx.batch.Commit(nil)
 }
 
@@ -95,7 +100,6 @@ func New(opts db.Options) (*PebbleDB, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &PebbleDB{
 		db: db,
 	}, nil
@@ -105,6 +109,7 @@ func New(opts db.Options) (*PebbleDB, error) {
 func (db *PebbleDB) ReadTx() db.ReadTx {
 	return ReadTx{
 		batch: db.db.NewIndexedBatch(),
+		db:    db.db,
 	}
 }
 
@@ -112,6 +117,7 @@ func (db *PebbleDB) ReadTx() db.ReadTx {
 func (db *PebbleDB) WriteTx() db.WriteTx {
 	return WriteTx{
 		batch: db.db.NewIndexedBatch(),
+		db:    db.db,
 	}
 }
 
