@@ -144,6 +144,7 @@ func newTendermint(app *BaseApplication,
 
 	tconfig := tmcfg.DefaultConfig()
 	tconfig.FastSyncMode = true
+	tconfig.FastSync = &tmcfg.FastSyncConfig{Version: "v2"}
 	tconfig.SetRoot(localConfig.DataDir)
 	if err := os.MkdirAll(localConfig.DataDir+"/config", 0o755); err != nil {
 		log.Fatal(err)
