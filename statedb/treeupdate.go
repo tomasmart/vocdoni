@@ -362,6 +362,10 @@ func (v *treeUpdateView) GenProof(key []byte) ([]byte, []byte, error) {
 	return (*TreeUpdate)(v).GenProof(key)
 }
 
+func (v *treeUpdateView) PrintGraphviz() error {
+	return v.tree.PrintGraphviz()
+}
+
 // verify that treeUpdateView fulfills the TreeViewer interface.
 var _ TreeViewer = (*treeUpdateView)(nil)
 

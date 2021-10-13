@@ -310,3 +310,7 @@ func (t *Tree) ImportDump(b []byte) error {
 	}
 	return nil
 }
+
+func (t *Tree) PrintGraphviz() error {
+	return t.tree.PrintGraphviz(nil)
+}

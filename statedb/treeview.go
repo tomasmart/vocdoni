@@ -56,6 +56,7 @@ type TreeViewer interface {
 	// DeepSubTree allows opening a nested subTree by passing the list of tree
 	// configurations.
 	DeepSubTree(cfgs ...TreeConfig) (TreeViewer, error)
+	PrintGraphviz() error
 }
 
 var _ TreeViewer = (*TreeView)(nil)
@@ -97,6 +98,10 @@ func (v *TreeView) Get(key []byte) ([]byte, error) {
 // stopped and this function returns.
 func (v *TreeView) IterateNodes(callback func(key, value []byte) bool) error {
 	return v.tree.Iterate(nil, callback)
+}
+
+func (v *TreeView) PrintGraphviz() error {
+	return v.tree.PrintGraphviz()
 }
 
 // Iterate iterates over all leafs of this tree.  When callback returns true,
