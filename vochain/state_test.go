@@ -115,3 +115,70 @@ func TestStateBasic(t *testing.T) {
 		t.Errorf("missing vote nullifiers (got %d expected %d)", len(nullifiers), 5)
 	}
 }
+
+type Listener struct {
+	processStart [][][]byte
+}
+
+func (l *Listener) OnVote(vote *models.Vote, txIndex int32)                                      {}
+func (l *Listener) OnNewTx(blockHeight uint32, txIndex int32)                                    {}
+func (l *Listener) OnProcess(pid, eid []byte, censusRoot, censusURI string, txIndex int32)       {}
+func (l *Listener) OnProcessStatusChange(pid []byte, status models.ProcessStatus, txIndex int32) {}
+func (l *Listener) OnCancel(pid []byte, txIndex int32)                                           {}
+func (l *Listener) OnProcessKeys(pid []byte, encryptionPub string, txIndex int32)                {}
+func (l *Listener) OnRevealKeys(pid []byte, encryptionPriv string, txIndex int32)                {}
+func (l *Listener) OnProcessResults(pid []byte, results *models.ProcessResult, txIndex int32) error {
+	return nil
+}
+func (l *Listener) OnProcessesStart(pids [][]byte) {
+	l.processStart = append(l.processStart, pids)
+}
+func (l *Listener) Commit(height uint32) (err error) {
+	return nil
+}
+func (l *Listener) Rollback() {}
+
+func TestOnProcessStart(t *testing.T) {
+	rng := newRandom(0)
+	log.Init("info", "stdout")
+	s, err := NewState(db.TypePebble, t.TempDir())
+	qt.Assert(t, err, qt.IsNil)
+	defer s.Close()
+
+	listener := &Listener{}
+	s.AddEventListener(listener)
+
+	doBlock := func(height uint32, fn func()) {
+		s.Rollback()
+		s.SetHeight(height)
+		fn()
+		_, err := s.Save()
+		qt.Assert(t, err, qt.IsNil)
+	}
+
+	pid := rng.RandomBytes(32)
+	startBlock := uint32(4)
+	doBlock(1, func() {
+		censusURI := "ipfs://foobar"
+		p := &models.Process{
+			EntityId:   rng.RandomBytes(32),
+			CensusURI:  &censusURI,
+			ProcessId:  pid,
+			StartBlock: startBlock,
+			Mode: &models.ProcessMode{
+				PreRegister: true,
+			},
+			EnvelopeType: &models.EnvelopeType{
+				Anonymous: true,
+			},
+		}
+		qt.Assert(t, s.AddProcess(p), qt.IsNil)
+	})
+
+	for i := uint32(2); i < 6; i++ {
+		doBlock(i, func() {})
+		if i >= startBlock {
+			qt.Assert(t, listener.processStart, qt.DeepEquals, [][][]byte{{pid}})
+		}
+	}
+}

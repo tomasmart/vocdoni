@@ -54,6 +54,9 @@ func processGetCensusRoot(value []byte) ([]byte, error) {
 	if err := proto.Unmarshal(value, &sdbProc); err != nil {
 		return nil, fmt.Errorf("cannot unmarshal StateDBProcess: %w", err)
 	}
+	if len(sdbProc.Process.CensusRoot) != 32 {
+		return nil, fmt.Errorf("len(sdbProc.Process.CensusRoot) != 32")
+	}
 	return sdbProc.Process.CensusRoot, nil
 }
 
@@ -78,6 +81,9 @@ func processGetVotesRoot(value []byte) ([]byte, error) {
 	var sdbProc models.StateDBProcess
 	if err := proto.Unmarshal(value, &sdbProc); err != nil {
 		return nil, fmt.Errorf("cannot unmarshal StateDBProcess: %w", err)
+	}
+	if len(sdbProc.VotesRoot) != 32 {
+		return nil, fmt.Errorf("len(sdbProc.VotesRoot) != 32")
 	}
 	return sdbProc.VotesRoot, nil
 }
@@ -215,7 +221,8 @@ type State struct {
 	mempoolRemoveTxKeys func([][32]byte, bool)
 	txCounter           int32
 	eventListeners      []EventListener
-	currentHeight       uint32 // current height
+	// currentHeight is the height of the current started block
+	currentHeight uint32
 }
 
 // NewState creates a new State
@@ -789,12 +796,6 @@ func (v *State) Save() ([]byte, error) {
 			log.Warnf("event callback error on commit: %v", err)
 		}
 	}
-	// TODO: Figure out a way to notify via event the fact that a process
-	// startBlock == height.  For example, keep a persistent map of
-	// startBlock -> []processID, and query it and call
-	// l.ProcessStartBlock([]processID).  Or via the commit, if the
-	// listener has a list of processes indexed by startBlock (in
-	// persistent storage), that works too.
 	return v.Store.Hash()
 }
 
@@ -832,9 +833,26 @@ func (v *State) CurrentHeight() uint32 {
 	return atomic.LoadUint32(&v.currentHeight)
 }
 
-// SetHeight sets the height for the current block.
+// SetHeight sets the height for the current block and does work related to
+// starting a new block.
 func (v *State) SetHeight(height uint32) {
 	atomic.StoreUint32(&v.currentHeight, height)
+
+	// Notify listeners about processes that start in this block.
+	pids, err := v.processIDsByStartBlock(height)
+	if err != nil {
+		log.Fatalf("cannot get processIDs by StartBlock: %v", err)
+	}
+	if len(pids) > 0 {
+		for _, l := range v.eventListeners {
+			l.OnProcessesStart(pids)
+		}
+	}
+
+	// TODO: Purge rolling censuses from all processes that start now
+	// for _, pid := range pids {
+	//   v.PurgeRollingCensus(pid)
+	// }
 }
 
 // WorkingHash returns the hash of the vochain StateDB (mainTree.Root)

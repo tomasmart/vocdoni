@@ -44,7 +44,8 @@ type BaseApplication struct {
 	fnGetBlockByHash   func(hash []byte) *tmtypes.Block
 	fnSendTx           func(tx []byte) (*ctypes.ResultBroadcastTx, error)
 	blockCache         *lru.AtomicCache
-	height             uint32
+	// height of the last ended block
+	height uint32
 	// endBlockTimestamp is the last block end timestamp calculated from local time.
 	endBlockTimestamp int64
 	// startBlockTimestamp is the current block timestamp from tendermint's

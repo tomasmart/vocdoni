@@ -13,7 +13,9 @@ import (
 )
 
 var emptyVotesRoot = make([]byte, VotesCfg.HashFunc().Len())
+var emptyCensusRoot = make([]byte, CensusCfg.HashFunc().Len())
 
+// AddProcess adds or overides a new process to vochain.
 // NOTE(Edu):  Should we allow this function to overide a process?  I have
 // checked calls to AddProcess and it seems it's only called via AddTx in the
 // case of Tx_NewProcess.  In that same function, before calling AddProcess,
@@ -26,8 +28,13 @@ var emptyVotesRoot = make([]byte, VotesCfg.HashFunc().Len())
 // later).
 // NOTE(Edu):  I have updated this funtion assuming that only new processes are
 // added and never modified via this funciton.
-// AddProcess adds or overides a new process to vochain
 func (v *State) AddProcess(p *models.Process) error {
+	preRegister := p.Mode != nil && p.Mode.PreRegister
+	anonymous := p.EnvelopeType != nil && p.EnvelopeType.Anonymous
+	if preRegister {
+		p.CensusRoot = emptyCensusRoot
+	}
+
 	newProcessBytes, err := proto.Marshal(
 		&models.StateDBProcess{Process: p, VotesRoot: emptyVotesRoot})
 	if err != nil {
@@ -43,7 +50,7 @@ func (v *State) AddProcess(p *models.Process) error {
 		// TODO: The key is sequential index, the value is the key.  To
 		// store the mapping between index and key, use the NoState
 		// database in the censusTree.
-		if p.Mode != nil && p.Mode.PreRegister && p.EnvelopeType != nil && p.EnvelopeType.Anonymous {
+		if preRegister && anonymous {
 			if _, err := v.Tx.DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(p.ProcessId)); err != nil {
 				return err
 			}
