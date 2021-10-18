@@ -1,9 +1,11 @@
 package vochain
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -17,9 +19,11 @@ import (
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 	snarkTypes "github.com/vocdoni/go-snark/types"
+	zkartifacts "go.vocdoni.io/dvote/crypto/zk/artifacts"
 	"google.golang.org/protobuf/proto"
 
 	"go.vocdoni.io/dvote/config"
+	"go.vocdoni.io/dvote/crypto/zk"
 	"go.vocdoni.io/dvote/db/lru"
 	"go.vocdoni.io/dvote/db/metadb"
 	"go.vocdoni.io/dvote/log"
@@ -61,7 +65,6 @@ func NewBaseApplication(dbType, dbpath string) (*BaseApplication, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot create vochain state: (%s)", err)
 	}
-	// TODO: Download circuit artifacts, and check hashes against genesis.
 	return &BaseApplication{
 		State:      state,
 		blockCache: lru.NewAtomic(32),
@@ -78,10 +81,31 @@ func TestBaseApplication(tb testing.TB) *BaseApplication {
 	return app
 }
 
-// TODO: Implement app.LoadZkVks which downloads the verification keys of all
-// circuits set in the genesis from the url passed via vochaincfg, stores them
-// in a path set by vochaincfg, and checks the hashes agains the genesis zk
-// artifacts field.
+// LoadZkVKs loads the Zero Knowledge Verification Keys for the given
+// ChainID into the BaseApplication, downloading them if necessary, and
+// verifying their cryptographic hahes.
+func (app *BaseApplication) LoadZkVKs(ctx context.Context) error {
+	app.ZkVKs = []*snarkTypes.Vk{}
+	for i, cc := range Genesis[app.chainId].CircuitsConfig {
+		log.Infof("downloading zk-circuits-artifacts index: %d", i)
+
+		// download VKs from CircuitsConfig
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
+		defer cancel()
+		if err := zkartifacts.DownloadVKFile(ctx, cc); err != nil {
+			return err
+		}
+
+		// parse VK and store it into vnode.ZkVKs
+		log.Infof("parse VK from file into memory. CircuitArtifact index: %d", i)
+		vk, err := zk.LoadVkFromFile(filepath.Join(cc.LocalDir, cc.CircuitPath, zkartifacts.FilenameVK))
+		if err != nil {
+			return err
+		}
+		app.ZkVKs = append(app.ZkVKs, vk)
+	}
+	return nil
+}
 
 func (app *BaseApplication) SetNode(vochaincfg *config.VochainCfg, genesis []byte) error {
 	var err error

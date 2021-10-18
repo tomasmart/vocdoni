@@ -35,9 +35,7 @@ func (v *State) AddProcess(p *models.Process) error {
 	}
 	v.Tx.Lock()
 	err = func() error {
-		fmt.Printf("DBG before DeepAdd\n")
 		if err := v.Tx.DeepAdd(p.ProcessId, newProcessBytes, ProcessesCfg); err != nil {
-			fmt.Printf("DBG after DeepAdd\n")
 			return err
 		}
 		// If Mode.PreRegister && EnvelopeType.Anonymous we create (by
@@ -45,7 +43,7 @@ func (v *State) AddProcess(p *models.Process) error {
 		// TODO: The key is sequential index, the value is the key.  To
 		// store the mapping between index and key, use the NoState
 		// database in the censusTree.
-		if p.Mode.PreRegister && p.EnvelopeType.Anonymous {
+		if p.Mode != nil && p.Mode.PreRegister && p.EnvelopeType != nil && p.EnvelopeType.Anonymous {
 			if _, err := v.Tx.DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(p.ProcessId)); err != nil {
 				return err
 			}

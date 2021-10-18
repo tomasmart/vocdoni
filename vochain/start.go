@@ -2,6 +2,7 @@
 package vochain
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -39,7 +40,12 @@ func NewVochain(vochaincfg *config.VochainCfg, genesis []byte) *BaseApplication 
 	if err := app.Node.Start(); err != nil {
 		log.Fatal(err)
 	}
-	// TODO: Call app.LoadZkVks()
+	// get the zk Circuits VerificationKey files
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
+	defer cancel()
+	if err := app.LoadZkVKs(ctx); err != nil {
+		log.Fatal(err)
+	}
 	// Set mempool function for removing transactions.
 	app.State.mempoolRemoveTxKeys = func(keys [][32]byte, removeFromCache bool) {
 		mp := app.Node.Mempool().(*mempl.CListMempool)
