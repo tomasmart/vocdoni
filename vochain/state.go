@@ -314,9 +314,9 @@ func initStateDB(database db.Database) (*statedb.StateDB, error) {
 	return sdb, update.Commit(0)
 }
 
-// mainTreeView is a thread-safe function to obtain a pointer to the last
+// MainTreeView is a thread-safe function to obtain a pointer to the last
 // opened mainTree as a TreeView.
-func (v *State) mainTreeView() *statedb.TreeView {
+func (v *State) MainTreeView() *statedb.TreeView {
 	return v.mainTreeViewValue.Load().(*statedb.TreeView)
 }
 
@@ -332,7 +332,7 @@ func (v *State) setMainTreeView(treeView *statedb.TreeView) {
 // last commited version.
 func (v *State) mainTreeViewer(isQuery bool) statedb.TreeViewer {
 	if isQuery {
-		return v.mainTreeView()
+		return v.MainTreeView()
 	}
 	return v.Tx.AsTreeView()
 }

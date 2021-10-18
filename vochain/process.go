@@ -51,7 +51,13 @@ func (v *State) AddProcess(p *models.Process) error {
 		// store the mapping between index and key, use the NoState
 		// database in the censusTree.
 		if preRegister && anonymous {
-			if _, err := v.Tx.DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(p.ProcessId)); err != nil {
+			census, err := v.Tx.DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(p.ProcessId))
+			if err != nil {
+				return err
+			}
+			// We store census size as little endian 64 bits.  Set it to 0.
+			censusLenLE := [8]byte{}
+			if err := census.NoState().Set(keyCensusLen, censusLenLE[:]); err != nil {
 				return err
 			}
 		}

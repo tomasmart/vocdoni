@@ -93,4 +93,15 @@ func (c *CensusDownloader) OnProcessResults(pid []byte,
 	return nil
 }
 
-func (s *CensusDownloader) OnProcessesStart(pids [][]byte) {}
+func (s *CensusDownloader) OnProcessesStart(pids [][]byte) {
+	for _, pid := range pids {
+		census, err := s.vochain.State.DumpRollingCensus(pid)
+		if err != nil {
+			log.Fatalf("cannot dump census with pid %v: %v", pid, err)
+		}
+		if _, err := s.census.ImportDump(census.CensusID,
+			census.Type, census.DumpRoot, census.DumpData); err != nil {
+			log.Fatalf("cannot import census with pid %v: %v", pid, err)
+		}
+	}
+}

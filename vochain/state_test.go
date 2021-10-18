@@ -176,7 +176,16 @@ func TestOnProcessStart(t *testing.T) {
 	})
 
 	for i := uint32(2); i < 6; i++ {
-		doBlock(i, func() {})
+		doBlock(i, func() {
+			if i < startBlock {
+				// Create a key with the last byte at 0 to make
+				// sure it fits in the Poseidon field
+				key := [32]byte{}
+				copy(key[:31], rng.RandomBytes(31))
+				err := s.AddToRollingCensus(pid, key[:], nil)
+				qt.Assert(t, err, qt.IsNil)
+			}
+		})
 		if i >= startBlock {
 			qt.Assert(t, listener.processStart, qt.DeepEquals, [][][]byte{{pid}})
 		}

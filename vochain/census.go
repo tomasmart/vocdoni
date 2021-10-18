@@ -1,6 +1,8 @@
 package vochain
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -9,20 +11,47 @@ import (
 	models "go.vocdoni.io/proto/build/go/models"
 )
 
+// keyCensusLen is the census.NoState key used to store the census size.
+var keyCensusLen = []byte("len")
+
+// // pathCensusKeyIndex is the census.NoState path used to store key index
+// // indexed by key.
+// const pathCensusKeyIndex = "key"
+//
+// // keyCensusKeyIndex returns the census.Nostate key where key index is stored.
+// func keyCensusKeyIndex(key []byte) []byte {
+// 	return []byte(path.Join(pathCensusKeyIndex, string(key)))
+// }
+
 // AddToRollingCensus adds a new key to an existing rolling census.
-// If census does not exist yet it will be created.
-func (s *State) AddToRollingCensus(pid []byte, key []byte, weight *big.Int) error {
-	// TODO: [C] Insert key into subTree ProcessesCfg - (pid) -> CensusPoseidonCfg
-	/*
-		// In the state we only store the last census root (as value) using key as index
-		s.Lock()
-		err := s.Store.Tree(CensusTree).Add(p.ProcessId, root)
-		s.Unlock()
-		if err != nil {
-			return err
-		}
-	*/
-	return fmt.Errorf("TODO")
+// NOTE: weight value is not used.
+func (v *State) AddToRollingCensus(pid []byte, key []byte, weight *big.Int) error {
+	v.Tx.Lock()
+	defer v.Tx.Unlock()
+	census, err := v.Tx.DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(pid))
+	if err != nil {
+		return fmt.Errorf("cannot open rolling census with pid %x: %w", pid, err)
+	}
+	noState := census.NoState()
+	censusLenLE, err := noState.Get(keyCensusLen)
+	if err != nil {
+		return fmt.Errorf("cannot get ceneusLen: %w", err)
+	}
+	// Add key to census
+	if err := census.Add(censusLenLE, key); err != nil {
+		return err
+	}
+	// // Store mapping between key -> key index
+	// if err := noState.Set(keyCensusKeyIndex(key), censusLenLE); err != nil {
+	// 	return err
+	// }
+	censusLen := binary.LittleEndian.Uint64(censusLenLE)
+	binary.LittleEndian.PutUint64(censusLenLE, censusLen+1)
+	// Update census size
+	if err := noState.Set(keyCensusLen, censusLenLE); err != nil {
+		return err
+	}
+	return nil
 }
 
 // PurgeRollingCensus removes a rolling census from the permanent store
@@ -32,15 +61,59 @@ func (s *State) PurgeRollingCensus(pid []byte) error {
 }
 
 // GetRollingCensusRoot returns the last rolling census root for a process id
-func (s *State) GetRollingCensusRoot(pid []byte, isQuery bool) ([]byte, error) {
-	/*	s.Lock()
-		err := s.Store.Tree(CensusTree).Add(p.ProcessId, root)
-		s.Unlock()
-		if err != nil {
-			return err
-		}GetCensusRoot
-	*/
-	return nil, fmt.Errorf("TODO")
+func (v *State) GetRollingCensusRoot(pid []byte, isQuery bool) ([]byte, error) {
+	if !isQuery {
+		v.Tx.RLock()
+		defer v.Tx.RUnlock()
+	}
+	census, err := v.mainTreeViewer(isQuery).DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(pid))
+	if err != nil {
+		return nil, fmt.Errorf("cannot open rolling census with pid %x: %w", pid, err)
+	}
+	return census.Root()
+}
+
+type RollingCensus struct {
+	CensusID string
+	DumpData []byte
+	DumpRoot []byte
+	// IndexKeys [][]byte
+	Type models.Census_Type
+}
+
+func (v *State) DumpRollingCensus(pid []byte) (*RollingCensus, error) {
+	census, err := v.MainTreeView().DeepSubTree(ProcessesCfg,
+		CensusPoseidonCfg.WithKey(pid))
+	if err != nil {
+		return nil, fmt.Errorf("cannot access rolling census with pid %v: %w", pid, err)
+	}
+	// noState := census.NoState()
+	// censusLenLE, err := noState.Get(keyCensusLen)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("cannot get censusLen for census with pid %v: %w", pid, err)
+	// }
+	// censusLen := binary.LittleEndian.Uint64(censusLenLE)
+	// indexKeys := make([][]byte, censusLen)
+	// census.Iterate(func(indexLE, key []byte) bool {
+	// 	indexKeys[binary.LittleEndian.Uint64(indexLE)] = key
+	// 	return false
+	// })
+	dumpRoot, err := census.Root()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get census with pid %v root: %w", pid, err)
+	}
+	dumpData, err := census.Dump()
+	if err != nil {
+		return nil, fmt.Errorf("cannot dump census with pid %v: %w", pid, err)
+	}
+	censusID := hex.EncodeToString(dumpRoot)
+	return &RollingCensus{
+		CensusID: censusID,
+		DumpData: dumpData,
+		DumpRoot: dumpRoot,
+		// IndexKeys: indexKeys,
+		Type: models.Census_ARBO_POSEIDON,
+	}, nil
 }
 
 // RegisterKeyTxCheck validates a registerKeyTx transaction against the state
@@ -59,8 +132,11 @@ func RegisterKeyTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State)
 		return fmt.Errorf("process %x malformed", tx.ProcessId)
 	}
 	if state.CurrentHeight() >= process.StartBlock {
-		// TODO: [C] Check that process.Mode.PreRegister && process.EnvelopeType.Anonymous
 		return fmt.Errorf("process %x already started", tx.ProcessId)
+	}
+	if !(process.Mode.PreRegister && process.EnvelopeType.Anonymous) {
+		return fmt.Errorf("RegisterKeyTx only supported with " +
+			"Mode.PreRegister and EnvelopeType.Anonymous")
 	}
 	if process.Status != models.ProcessStatus_READY {
 		return fmt.Errorf("process %x not in READY state", tx.ProcessId)
@@ -71,7 +147,7 @@ func RegisterKeyTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State)
 	if signature == nil {
 		return fmt.Errorf("signature missing on voteTx")
 	}
-	if len(tx.NewKey) < 32 { // TODO: [C] check the correctnes of the new public key
+	if len(tx.NewKey) != 32 {
 		return fmt.Errorf("newKey wrong size")
 	}
 
