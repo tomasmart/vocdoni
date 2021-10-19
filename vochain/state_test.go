@@ -2,33 +2,15 @@ package vochain
 
 import (
 	"fmt"
-	"math/rand"
+	"runtime"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 	"go.vocdoni.io/dvote/db"
 	"go.vocdoni.io/dvote/log"
+	"go.vocdoni.io/dvote/test/testcommon/testutil"
 	models "go.vocdoni.io/proto/build/go/models"
 )
-
-type Random struct {
-	rand *rand.Rand
-}
-
-func newRandom(seed int64) Random {
-	return Random{
-		rand: rand.New(rand.NewSource(seed)),
-	}
-}
-
-func (r *Random) RandomBytes(n int) []byte {
-	b := make([]byte, n)
-	_, err := r.rand.Read(b)
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
 
 func TestStateReopen(t *testing.T) {
 	dir := t.TempDir()
@@ -49,7 +31,7 @@ func TestStateReopen(t *testing.T) {
 }
 
 func TestStateBasic(t *testing.T) {
-	rng := newRandom(0)
+	rng := testutil.NewRandom(0)
 	log.Init("info", "stdout")
 	s, err := NewState(db.TypePebble, t.TempDir())
 	if err != nil {
@@ -190,4 +172,67 @@ func TestOnProcessStart(t *testing.T) {
 			qt.Assert(t, listener.processStart, qt.DeepEquals, [][][]byte{{pid}})
 		}
 	}
+}
+
+// TestBlockMemoryUsage prints the Heap usage by the number of votes in a
+// block.  This is useful to analyze the memory taken by the underlying
+// database transaction in the StateDB in a real scenario.
+func TestBlockMemoryUsage(t *testing.T) {
+	rng := newRandom(0)
+	log.Init("info", "stdout")
+	s, err := NewState(db.TypePebble, t.TempDir())
+	qt.Assert(t, err, qt.IsNil)
+	defer s.Close()
+
+	var height uint32
+
+	// block 1
+	height = 1
+	s.Rollback()
+	s.SetHeight(height)
+
+	pid := rng.RandomBytes(32)
+	censusURI := "ipfs://foobar"
+	p := &models.Process{
+		EntityId:   rng.RandomBytes(32),
+		CensusURI:  &censusURI,
+		ProcessId:  pid,
+		StartBlock: 2,
+		Mode: &models.ProcessMode{
+			PreRegister: false,
+		},
+		EnvelopeType: &models.EnvelopeType{
+			Anonymous: false,
+		},
+	}
+	qt.Assert(t, s.AddProcess(p), qt.IsNil)
+
+	_, err = s.Save()
+	qt.Assert(t, err, qt.IsNil)
+
+	// block 2
+	height = 2
+	s.Rollback()
+	s.SetHeight(height)
+
+	var mem runtime.MemStats
+	numVotes := 22_000
+	for i := 0; i < numVotes; i++ {
+		v := &models.Vote{
+			ProcessId:   pid,
+			Nullifier:   rng.RandomBytes(32),
+			VotePackage: rng.RandomBytes(64),
+		}
+		qt.Assert(t, s.AddVote(v), qt.IsNil)
+
+		if i%1_000 == 0 {
+			runtime.GC()
+			runtime.ReadMemStats(&mem)
+			fmt.Printf("%v HeapAlloc: %v MiB, Heap:%v MiB\n",
+				i, mem.HeapAlloc/1024/1024, (mem.HeapIdle+mem.HeapInuse)/1024/1024)
+		}
+	}
+
+	_, err = s.Save()
+	qt.Assert(t, err, qt.IsNil)
 }

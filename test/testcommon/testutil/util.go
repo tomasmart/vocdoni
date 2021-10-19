@@ -3,6 +3,7 @@ package testutil
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"math/rand"
 	"testing"
 
 	"go.vocdoni.io/dvote/util"
@@ -26,6 +27,25 @@ func B642byte(tb testing.TB, s string) []byte {
 			panic(err)
 		}
 		tb.Fatal(err)
+	}
+	return b
+}
+
+type Random struct {
+	rand *rand.Rand
+}
+
+func NewRandom(seed int64) Random {
+	return Random{
+		rand: rand.New(rand.NewSource(seed)),
+	}
+}
+
+func (r *Random) RandomBytes(n int) []byte {
+	b := make([]byte, n)
+	_, err := r.rand.Read(b)
+	if err != nil {
+		panic(err)
 	}
 	return b
 }

@@ -48,7 +48,9 @@ func (c *CensusDownloader) importCensus(root, uri string) {
 func (c *CensusDownloader) Rollback() {
 	c.queueLock.Lock()
 	c.queue = make(map[string]string)
-	c.isFastSync = c.vochain.Node.ConsensusReactor().WaitSync()
+	if c.vochain.Node != nil {
+		c.isFastSync = c.vochain.Node.ConsensusReactor().WaitSync()
+	}
 	c.queueLock.Unlock()
 }
 

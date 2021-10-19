@@ -281,7 +281,7 @@ func (m *Manager) Handler(ctx context.Context, r *api.MetaRequest, isAuth bool,
 		//if !r.Digested {
 		//	key = snarks.Poseidon.Hash(key)
 		//}
-		// If tr.Type() == POSEIDON, resolve mapping key -> index before genProof
+		// If tr.Type() == ARBO_POSEIDON, resolve mapping key -> index before genProof
 		if tr.Type() == models.Census_ARBO_POSEIDON {
 			key, err = m.KeyToIndex(r.CensusID, key)
 			if err != nil {
