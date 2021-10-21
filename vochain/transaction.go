@@ -32,17 +32,17 @@ func (app *BaseApplication) AddTx(vtx *models.Tx, txBytes, signature []byte,
 		txVote := vtx.GetVote()
 		v, err := app.VoteEnvelopeCheck(txVote, txBytes, signature, txID, commit)
 		if err != nil || v == nil {
-			return []byte{}, fmt.Errorf("voteTxCheck: %w", err)
+			return nil, fmt.Errorf("voteTxCheck: %w", err)
 		}
 		if commit {
 			return v.Nullifier, app.State.AddVote(v)
 		}
 		return v.Nullifier, nil
 	case *models.Tx_Admin:
-		if err := AdminTxCheck(vtx, txBytes, signature, app.State); err != nil {
-			return []byte{}, fmt.Errorf("adminTxChek: %w", err)
+		tx, err := AdminTxCheck(vtx, txBytes, signature, app.State)
+		if err != nil {
+			return nil, fmt.Errorf("adminTxChek: %w", err)
 		}
-		tx := vtx.GetAdmin()
 		if commit {
 			switch tx.Txtype {
 			case models.TxType_ADD_ORACLE:
@@ -61,9 +61,8 @@ func (app *BaseApplication) AddTx(vtx *models.Tx, txBytes, signature []byte,
 						Power:   *tx.Power,
 					}
 					return []byte{}, app.State.AddValidator(validator)
-
 				}
-				return []byte{}, fmt.Errorf("addValidator: %w", err)
+				return nil, fmt.Errorf("addValidator: %w", err)
 
 			case models.TxType_REMOVE_VALIDATOR:
 				return []byte{}, app.State.RemoveValidator(tx.Address)
@@ -75,48 +74,53 @@ func (app *BaseApplication) AddTx(vtx *models.Tx, txBytes, signature []byte,
 		}
 
 	case *models.Tx_NewProcess:
-		if p, err := NewProcessTxCheck(vtx, txBytes, signature, app.State); err == nil {
+		if p, owner, err := NewProcessTxCheck(vtx, txBytes, signature, app.State); err == nil {
 			if commit {
-				tx := vtx.GetNewProcess()
-				if tx.Process == nil {
-					return []byte{}, fmt.Errorf("newProcess process is empty")
+				if err := app.State.ChargeForTx(*owner, models.TxType_NEW_PROCESS); err != nil {
+					return nil, err
 				}
 				return []byte{}, app.State.AddProcess(p)
 			}
 		} else {
-			return []byte{}, fmt.Errorf("newProcess: %w", err)
+			return nil, fmt.Errorf("newProcess: %w", err)
 		}
 
 	case *models.Tx_SetProcess:
-		if err := SetProcessTxCheck(vtx, txBytes, signature, app.State); err != nil {
-			return []byte{}, fmt.Errorf("setProcess: %w", err)
+		tx, owner, err := SetProcessTxCheck(vtx, txBytes, signature, app.State)
+		if err != nil {
+			return nil, fmt.Errorf("setProcess: %w", err)
 		}
 		if commit {
-			tx := vtx.GetSetProcess()
 			switch tx.Txtype {
 			case models.TxType_SET_PROCESS_STATUS:
 				if tx.GetStatus() == models.ProcessStatus_PROCESS_UNKNOWN {
-					return []byte{}, fmt.Errorf("set process status, status unknown")
+					return nil, fmt.Errorf("set process status, status unknown")
+				}
+				if err := app.State.ChargeForTx(*owner, models.TxType_SET_PROCESS_STATUS); err != nil {
+					return nil, err
 				}
 				return []byte{}, app.State.SetProcessStatus(tx.ProcessId, *tx.Status, true)
 			case models.TxType_SET_PROCESS_RESULTS:
 				if tx.GetResults() == nil {
-					return []byte{}, fmt.Errorf("set process results, results is nil")
+					return nil, fmt.Errorf("set process results, results is nil")
 				}
 				return []byte{}, app.State.SetProcessResults(tx.ProcessId, tx.Results, true)
 			case models.TxType_SET_PROCESS_CENSUS:
 				if tx.GetCensusRoot() == nil {
-					return []byte{}, fmt.Errorf("set process census, census root is nil")
+					return nil, fmt.Errorf("set process census, census root is nil")
+				}
+				if err := app.State.ChargeForTx(*owner, models.TxType_SET_PROCESS_CENSUS); err != nil {
+					return nil, err
 				}
 				return []byte{}, app.State.SetProcessCensus(tx.ProcessId, tx.CensusRoot, tx.GetCensusURI(), true)
 			default:
-				return []byte{}, fmt.Errorf("unknown set process tx type")
+				return nil, fmt.Errorf("unknown set process tx type")
 			}
 		}
 
 	case *models.Tx_RegisterKey:
 		if err := RegisterKeyTxCheck(vtx, txBytes, signature, app.State); err != nil {
-			return []byte{}, fmt.Errorf("registerKeyTx %w", err)
+			return nil, fmt.Errorf("registerKeyTx %w", err)
 		}
 		if commit {
 			tx := vtx.GetRegisterKey()
@@ -124,7 +128,7 @@ func (app *BaseApplication) AddTx(vtx *models.Tx, txBytes, signature []byte,
 		}
 
 	default:
-		return []byte{}, fmt.Errorf("invalid transaction type")
+		return nil, fmt.Errorf("invalid transaction type")
 	}
 	return []byte{}, nil
 }
@@ -328,41 +332,41 @@ func (app *BaseApplication) VoteEnvelopeCheck(ve *models.VoteEnvelope, txBytes, 
 }
 
 // AdminTxCheck is an abstraction of ABCI checkTx for an admin transaction
-func AdminTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State) error {
+func AdminTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State) (*models.AdminTx, error) {
 	tx := vtx.GetAdmin()
 	// check signature available
 	if signature == nil || tx == nil || txBytes == nil {
-		return fmt.Errorf("missing signature and/or admin transaction")
+		return nil, fmt.Errorf("missing signature and/or admin transaction")
 	}
 	// get oracles
 	oracles, err := state.Oracles(false)
 	if err != nil || len(oracles) == 0 {
-		return fmt.Errorf("cannot check authorization against a nil or empty oracle list")
+		return nil, fmt.Errorf("cannot check authorization against a nil or empty oracle list")
 	}
 
 	if authorized, addr, err := verifySignatureAgainstOracles(
 		oracles, txBytes, signature); err != nil {
-		return err
+		return nil, err
 	} else if !authorized {
-		return fmt.Errorf("unauthorized to perform an adminTx, address: %s", addr.Hex())
+		return nil, fmt.Errorf("unauthorized to perform an adminTx, address: %s", addr.Hex())
 	}
 
 	switch tx.Txtype {
 	case models.TxType_ADD_PROCESS_KEYS, models.TxType_REVEAL_PROCESS_KEYS:
 		if tx.ProcessId == nil {
-			return fmt.Errorf("missing processId on AdminTxCheck")
+			return nil, fmt.Errorf("missing processId on AdminTxCheck")
 		}
 		// check process exists
 		process, err := state.Process(tx.ProcessId, false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if process == nil {
-			return fmt.Errorf("process with id (%x) does not exist", tx.ProcessId)
+			return nil, fmt.Errorf("process with id (%x) does not exist", tx.ProcessId)
 		}
 		// check process actually requires keys
 		if !process.EnvelopeType.EncryptedVotes && !process.EnvelopeType.Anonymous {
-			return fmt.Errorf("process does not require keys")
+			return nil, fmt.Errorf("process does not require keys")
 		}
 
 		height := state.CurrentHeight()
@@ -370,41 +374,41 @@ func AdminTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State) error
 		switch tx.Txtype {
 		case models.TxType_ADD_PROCESS_KEYS:
 			if tx.KeyIndex == nil {
-				return fmt.Errorf("missing keyIndex on AdminTxCheck")
+				return nil, fmt.Errorf("missing keyIndex on AdminTxCheck")
 			}
 			// endblock is always greater than start block so that case is also included here
 			if height > process.StartBlock {
-				return fmt.Errorf("cannot add process keys to a process that has started or finished")
+				return nil, fmt.Errorf("cannot add process keys to a process that has started or finished")
 			}
 			// process is not canceled
 			if process.Status == models.ProcessStatus_CANCELED ||
 				process.Status == models.ProcessStatus_ENDED ||
 				process.Status == models.ProcessStatus_RESULTS {
-				return fmt.Errorf("cannot add process keys to a %s process", process.Status)
+				return nil, fmt.Errorf("cannot add process keys to a %s process", process.Status)
 			}
 			if len(process.EncryptionPublicKeys[*tx.KeyIndex]) > 0 {
-				return fmt.Errorf("keys for process %x already revealed", tx.ProcessId)
+				return nil, fmt.Errorf("keys for process %x already revealed", tx.ProcessId)
 			}
 			// check included keys and keyindex are valid
 			if err := checkAddProcessKeys(tx, process); err != nil {
-				return err
+				return nil, err
 			}
 		case models.TxType_REVEAL_PROCESS_KEYS:
 			if tx.KeyIndex == nil {
-				return fmt.Errorf("missing keyIndex on AdminTxCheck")
+				return nil, fmt.Errorf("missing keyIndex on AdminTxCheck")
 			}
 			// check process is finished
 			if height < process.StartBlock+process.BlockCount &&
 				!(process.Status == models.ProcessStatus_ENDED ||
 					process.Status == models.ProcessStatus_CANCELED) {
-				return fmt.Errorf("cannot reveal keys before the process is finished")
+				return nil, fmt.Errorf("cannot reveal keys before the process is finished")
 			}
 			if len(process.EncryptionPrivateKeys[*tx.KeyIndex]) > 0 {
-				return fmt.Errorf("keys for process %x already revealed", tx.ProcessId)
+				return nil, fmt.Errorf("keys for process %x already revealed", tx.ProcessId)
 			}
 			// check the keys are valid
 			if err := checkRevealProcessKeys(tx, process); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	case models.TxType_ADD_ORACLE:
@@ -412,32 +416,31 @@ func AdminTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State) error
 		if (bytes.Equal(tx.Address, []byte{})) ||
 			(len(tx.Address) != types.EthereumAddressSize) ||
 			(bytes.Equal(tx.Address, common.Address{}.Bytes())) {
-			return fmt.Errorf("invalid oracle address: %x", tx.Address)
+			return nil, fmt.Errorf("invalid oracle address: %x", tx.Address)
 		}
-		for idx, oracle := range oracles {
-			if oracle == common.BytesToAddress(tx.Address) {
-				return fmt.Errorf("oracle already added to oracle list at position %d", idx)
-			}
+		exists, err := state.IsOracle(common.BytesToAddress(tx.Address))
+		if err != nil {
+			return nil, fmt.Errorf("adminTxCheck: %w", err)
+		}
+		if exists {
+			return nil, fmt.Errorf("could not add oracle, already exist")
 		}
 	case models.TxType_REMOVE_ORACLE:
 		// check not empty, correct length and not 0x0 addr
 		if (bytes.Equal(tx.Address, []byte{})) ||
 			(len(tx.Address) != types.EthereumAddressSize) ||
 			(bytes.Equal(tx.Address, common.Address{}.Bytes())) {
-			return fmt.Errorf("invalid oracle address: %x", tx.Address)
+			return nil, fmt.Errorf("invalid oracle address: %x", tx.Address)
 		}
-		var found bool
-		for _, oracle := range oracles {
-			if oracle == common.BytesToAddress(tx.Address) {
-				found = true
-				break
-			}
+		exists, err := state.IsOracle(common.BytesToAddress(tx.Address))
+		if err != nil {
+			return nil, fmt.Errorf("adminTxCheck: %w", err)
 		}
-		if !found {
-			return fmt.Errorf("cannot remove oracle, not found")
+		if !exists {
+			return nil, fmt.Errorf("could not remove oracle, does not exist")
 		}
 	}
-	return nil
+	return tx, nil
 }
 
 func checkAddProcessKeys(tx *models.AdminTx, process *models.Process) error {

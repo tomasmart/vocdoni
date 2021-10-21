@@ -416,7 +416,7 @@ func (v *State) Oracles(isQuery bool) ([]common.Address, error) {
 func (v *State) IsOracle(addr common.Address) (bool, error) {
 	oracles, err := v.Oracles(false)
 	if err != nil || len(oracles) == 0 {
-		return false, fmt.Errorf("cannot check authorization against a nil or empty oracle list")
+		return false, nil
 	}
 	return func() bool {
 		for _, oracle := range oracles {

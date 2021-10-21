@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vocdoni/arbo"
 	"go.vocdoni.io/dvote/crypto/ethereum"
+	"go.vocdoni.io/dvote/log"
 	"go.vocdoni.io/proto/build/go/models"
 	"google.golang.org/protobuf/proto"
 )
@@ -48,6 +49,19 @@ func (a *Account) Transfer(dest *Account, amount uint64, nonce uint32) error {
 		return ErrBalanceOverflow
 	}
 	dest.Balance += amount
+	a.Balance -= amount
+	a.Nonce++
+	return nil
+}
+
+// Sub removes amount from the Account balance.
+func (a *Account) Sub(amount uint64) error {
+	if amount == 0 {
+		return fmt.Errorf("cannot burn zero amount")
+	}
+	if a.Balance < amount {
+		return ErrNotEnoughBalance
+	}
 	a.Balance -= amount
 	a.Nonce++
 	return nil
@@ -130,7 +144,34 @@ func (v *State) TransferBalance(from, to common.Address, amount uint64, nonce ui
 	return nil
 }
 
-// MintBalance increments the existing acc of address by amount
+// SetAccount stores an account for an address.
+// If account already exist it is overwritten.
+func (v *State) SetAccount(address common.Address, account *Account) error {
+	if account == nil {
+		return fmt.Errorf("could not save nil account")
+	}
+	accBytes, err := account.Marshal()
+	if err != nil {
+		return err
+	}
+	v.Tx.Lock()
+	defer v.Tx.Unlock()
+	return v.Tx.DeepSet(address.Bytes(), accBytes, AccountsCfg)
+}
+
+// Burn transfers amount balance from address to the burn wallet.
+func (v *State) Burn(address common.Address, amount uint64) error {
+	if amount == 0 {
+		return fmt.Errorf("cannot burn zero amount")
+	}
+	acc, err := v.GetAccount(address, false)
+	if err != nil {
+		return err
+	}
+	return v.TransferBalance(address, common.HexToAddress("0xffffffffffffffffffff"), amount, acc.GetNonce(), false)
+}
+
+// MintBalance increments the existing acc of address by amount.
 func (v *State) MintBalance(address common.Address, amount uint64) error {
 	if amount == 0 {
 		return fmt.Errorf("cannot mint a zero amount balance")
@@ -185,10 +226,37 @@ func (v *State) VerifyAccountBalance(message, signature []byte, amount uint64) (
 	}
 	acc, err := v.GetAccount(address, false)
 	if err != nil {
-		return false, address, fmt.Errorf("VerifyAccountWithAmmount: %v", err)
+		return false, address, fmt.Errorf("verifyAccountWithAmmount: %w", err)
 	}
 	if acc == nil {
 		return false, address, nil
 	}
 	return acc.Balance >= amount, address, nil
+}
+
+// ChargeForTx extracts balance from the address account depending on the transaction type.
+// If the address is an Oracle, this function does nothing.
+func (v *State) ChargeForTx(address common.Address, txType models.TxType) error {
+	log.Debugf("charging %s for tx type %s", address.Hex(), txType.String())
+	// Check if the address is an oracle, in that case we don't burn any balance
+	if oracle, err := v.IsOracle(address); err != nil {
+		return fmt.Errorf("chargeForTx: %w", err)
+	} else if oracle {
+		return nil
+	}
+	switch txType {
+	case models.TxType_NEW_PROCESS:
+		if err := v.Burn(address, NewProcessCost); err != nil {
+			return fmt.Errorf("chargeForTx: %w", err)
+		}
+	case models.TxType_SET_PROCESS_CENSUS,
+		models.TxType_SET_PROCESS_QUESTION_INDEX,
+		models.TxType_SET_PROCESS_STATUS:
+		if err := v.Burn(address, SetProcessCost); err != nil {
+			return fmt.Errorf("chargeForTx: %w", err)
+		}
+	default:
+		return fmt.Errorf("chargeForTx: txType not recognized")
+	}
+	return nil
 }
