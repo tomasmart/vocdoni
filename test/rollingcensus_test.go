@@ -37,9 +37,9 @@ func TestRollingCensus(t *testing.T) {
 		CensusURI:  &censusURI,
 		ProcessId:  pid,
 		StartBlock: 3,
-		Mode: &models.ProcessMode{
-			PreRegister: true,
-		},
+		// Mode: &models.ProcessMode{
+		// 	PreRegister: true,
+		// },
 		EnvelopeType: &models.EnvelopeType{
 			Anonymous: true,
 		},

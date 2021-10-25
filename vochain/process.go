@@ -37,6 +37,9 @@ func (v *State) AddProcess(p *models.Process) error {
 		}
 		// If Mode.PreRegister && EnvelopeType.Anonymous we create (by
 		// opening) a new empty poseidon census tree at p.ProcessId.
+		fmt.Printf("A: %+v\n", p.Mode)
+		fmt.Printf("B: %+v\n", p.Mode.PreRegister)
+		fmt.Printf("C\n")
 		if preRegister && anonymous {
 			census, err := v.Tx.DeepSubTree(ProcessesCfg, CensusPoseidonCfg.WithKey(p.ProcessId))
 			if err != nil {
