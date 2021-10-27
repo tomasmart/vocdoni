@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vocdoni/arbo"
 	"go.vocdoni.io/dvote/api"
 	"go.vocdoni.io/dvote/crypto/ethereum"
 	"go.vocdoni.io/dvote/crypto/zk/artifacts"
@@ -256,6 +257,163 @@ func (c *Client) GetCSPproofBatch(signers []*ethereum.SignKeys,
 	return proofs, nil
 }
 
+// getZKCensusKey returns zkCensusKey, secretKey
+func getZKCensusKey(s *ethereum.SignKeys) ([]byte, []byte) {
+	// secret is 65 bytes
+	secret, err := s.Sign([]byte("secretKey"))
+	if err != nil {
+		log.Fatalf("Cannot sign: %v", err)
+	}
+	hasher := arbo.HashPoseidon{}
+	secretKey, err := hasher.Hash(secret[:22], secret[22:44], secret[44:])
+	if err != nil {
+		log.Fatalf("Cannnot calculate pre-register key with Poseidon: %v", err)
+	}
+	pubKey, err := hasher.Hash(secretKey)
+	if err != nil {
+		log.Fatalf("Cannnot calculate pre-register key with Poseidon: %v", err)
+	}
+	return pubKey, secretKey
+}
+
+func (c *Client) TestPreRegisterKeys(
+	pid,
+	eid,
+	root []byte,
+	signers []*ethereum.SignKeys,
+	censusOrigin models.CensusOrigin,
+	caSigner *ethereum.SignKeys,
+	proofs [][]byte,
+	encrypted, doubleVoting, checkNullifiers bool,
+	wg *sync.WaitGroup) (time.Duration, error) {
+
+	var err error
+	var keys []string
+	// Generate merkle proofs
+	if proofs == nil {
+		switch censusOrigin {
+		case models.CensusOrigin_OFF_CHAIN_TREE:
+			proofs, err = c.GetMerkleProofBatch(signers, root, false)
+		case models.CensusOrigin_OFF_CHAIN_CA:
+			proofs, err = c.GetCSPproofBatch(signers, caSigner, pid)
+		default:
+			return 0, fmt.Errorf("censusOrigin not supported")
+		}
+	}
+	if err != nil {
+		return 0, err
+	}
+	// Wait until all gateway connections are ready
+	wg.Done()
+	log.Infof("%s is waiting other gateways to be ready before it can start voting", c.Addr)
+	wg.Wait()
+
+	// Get encryption keys
+	keyIndexes := []uint32{}
+	if encrypted {
+		if pk, err := c.GetKeys(pid, eid); err != nil {
+			return 0, fmt.Errorf("cannot get process keys: (%s)", err)
+		} else {
+			for _, k := range pk.pub {
+				if len(k.Key) > 0 {
+					keyIndexes = append(keyIndexes, uint32(k.Idx))
+					keys = append(keys, k.Key)
+				}
+			}
+		}
+		if len(keys) == 0 {
+			return 0, fmt.Errorf("process keys is empty")
+		}
+		log.Infof("got encryption keys!")
+	}
+	// Send votes
+	log.Infof("sending pre-register keys")
+	timeDeadLine := time.Second * 200
+	if len(signers) > 1000 {
+		timeDeadLine = time.Duration(len(signers)/5) * time.Second
+	}
+	log.Infof("time deadline set to %d seconds", timeDeadLine/time.Second)
+	req := api.MetaRequest{Method: "submitRawTx"}
+	start := time.Now()
+
+	for i := 0; i < len(signers); i++ {
+		s := signers[i]
+		zkCensusKey, _ := getZKCensusKey(s)
+		v := &models.RegisterKeyTx{
+			Nonce:     util.RandomBytes(32),
+			ProcessId: pid,
+			NewKey:    zkCensusKey,
+		}
+		switch censusOrigin {
+		case models.CensusOrigin_OFF_CHAIN_TREE:
+			v.Proof = &models.Proof{
+				Payload: &models.Proof_Arbo{
+					Arbo: &models.ProofArbo{
+						Type:     models.ProofArbo_BLAKE2B,
+						Siblings: proofs[i],
+					},
+				},
+			}
+
+		case models.CensusOrigin_OFF_CHAIN_CA:
+			p := &models.ProofCA{}
+			if err := proto.Unmarshal(proofs[i], p); err != nil {
+				log.Fatal(err)
+			}
+			v.Proof = &models.Proof{Payload: &models.Proof_Ca{Ca: p}}
+
+		default:
+			log.Fatal("censusOrigin %s not supported", censusOrigin.String())
+		}
+
+		stx := &models.SignedTx{}
+		stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_RegisterKey{RegisterKey: v}})
+		if err != nil {
+			return 0, err
+		}
+
+		if stx.Signature, err = s.Sign(stx.Tx); err != nil {
+			return 0, err
+		}
+		if req.Payload, err = proto.Marshal(stx); err != nil {
+			return 0, err
+		}
+		log.Debugf("pre-registering zkCensusKey:%x", zkCensusKey)
+		resp, err := c.Request(req, nil)
+		if err != nil {
+			return 0, err
+		}
+		if !resp.Ok {
+			if strings.Contains(resp.Message, "mempool is full") {
+				log.Warnf("mempool is full, waiting and retrying")
+				time.Sleep(1 * time.Second)
+				i--
+			} else {
+				return 0, fmt.Errorf("%s failed: %s", req.Method, resp.Message)
+			}
+		}
+		if (i+1)%100 == 0 {
+			log.Infof("pre-register progress for %s: %d%%", c.Addr, ((i+1)*100)/(len(signers)))
+		}
+
+		// Try double voting (should fail)
+		if doubleVoting {
+			resp, err := c.Request(req, nil)
+			if err != nil {
+				return 0, err
+			}
+			if resp.Ok {
+				return 0, fmt.Errorf("double pre-register not detected")
+			}
+		}
+	}
+
+	log.Infof("pre-registers submited! took %s", time.Since(start))
+	preRegisterEapsedTime := time.Since(start)
+
+	return preRegisterEapsedTime, nil
+}
+
 func (c *Client) TestSendVotes(
 	pid,
 	eid,
@@ -451,26 +609,32 @@ func (c *Client) CreateProcess(oracle *ethereum.SignKeys,
 	censusURI string,
 	pid []byte,
 	envelopeType *models.EnvelopeType,
+	mode *models.ProcessMode,
 	censusOrigin models.CensusOrigin,
-	duration int) (uint32, error) {
+	duration int,
+	maxCensusSize uint64) (uint32, error) {
 	var req api.MetaRequest
 	req.Method = "submitRawTx"
 	block, err := c.GetCurrentBlock()
 	if err != nil {
 		return 0, err
 	}
+	if mode == nil {
+		mode = &models.ProcessMode{AutoStart: true, Interruptible: true}
+	}
 	processData := &models.Process{
-		EntityId:     entityID,
-		CensusRoot:   censusRoot,
-		CensusURI:    &censusURI,
-		CensusOrigin: censusOrigin,
-		BlockCount:   uint32(duration),
-		ProcessId:    pid,
-		StartBlock:   block + 4,
-		EnvelopeType: envelopeType,
-		Mode:         &models.ProcessMode{AutoStart: true, Interruptible: true},
-		Status:       models.ProcessStatus_READY,
-		VoteOptions:  &models.ProcessVoteOptions{MaxCount: 16, MaxValue: 8},
+		EntityId:      entityID,
+		CensusRoot:    censusRoot,
+		CensusURI:     &censusURI,
+		CensusOrigin:  censusOrigin,
+		BlockCount:    uint32(duration),
+		ProcessId:     pid,
+		StartBlock:    block + 4,
+		EnvelopeType:  envelopeType,
+		Mode:          mode,
+		Status:        models.ProcessStatus_READY,
+		VoteOptions:   &models.ProcessVoteOptions{MaxCount: 16, MaxValue: 8},
+		MaxCensusSize: &maxCensusSize,
 	}
 	p := &models.NewProcessTx{
 		Txtype:  models.TxType_NEW_PROCESS,

@@ -19,6 +19,7 @@ import (
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
 	snarkTypes "github.com/vocdoni/go-snark/types"
+	"go.vocdoni.io/dvote/crypto/zk/artifacts"
 	zkartifacts "go.vocdoni.io/dvote/crypto/zk/artifacts"
 	"google.golang.org/protobuf/proto"
 
@@ -92,7 +93,14 @@ func TestBaseApplication(tb testing.TB) *BaseApplication {
 // verifying their cryptographic hahes.
 func (app *BaseApplication) LoadZkVKs(ctx context.Context) error {
 	app.ZkVKs = []*snarkTypes.Vk{}
-	for i, cc := range Genesis[app.chainId].CircuitsConfig {
+	var circuits []artifacts.CircuitConfig
+	if genesis, ok := Genesis[app.chainId]; ok {
+		circuits = genesis.CircuitsConfig
+	} else {
+		log.Warn("Using dev network genesis CircuitsConfig")
+		circuits = Genesis["dev"].CircuitsConfig
+	}
+	for i, cc := range circuits {
 		log.Infof("downloading zk-circuits-artifacts index: %d", i)
 
 		// download VKs from CircuitsConfig
