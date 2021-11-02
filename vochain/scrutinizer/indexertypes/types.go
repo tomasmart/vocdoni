@@ -32,13 +32,15 @@ type CountStore struct {
 // The scrutinizer Process data type is different from the vochain state data type
 // since it is optimized for querying purposes and not for keeping a shared consensus state.
 type Process struct {
-	ID                types.HexBytes             `badgerholdKey:"ID" json:"processId"`
-	EntityID          types.HexBytes             `badgerholdIndex:"EntityID" json:"entityId"`
-	EntityIndex       uint32                     `json:"entityIndex"`
-	StartBlock        uint32                     `json:"startBlock"`
-	EndBlock          uint32                     `badgerholdIndex:"EndBlock" json:"endBlock"`
-	Rheight           uint32                     `badgerholdIndex:"Rheight" json:"-"`
-	CensusRoot        types.HexBytes             `json:"censusRoot"`
+	ID          types.HexBytes `badgerholdKey:"ID" json:"processId"`
+	EntityID    types.HexBytes `badgerholdIndex:"EntityID" json:"entityId"`
+	EntityIndex uint32         `json:"entityIndex"`
+	StartBlock  uint32         `json:"startBlock"`
+	EndBlock    uint32         `badgerholdIndex:"EndBlock" json:"endBlock"`
+	Rheight     uint32         `badgerholdIndex:"Rheight" json:"-"`
+	CensusRoot  types.HexBytes `json:"censusRoot"`
+	// TODO: Fill
+	RollingCensusRoot types.HexBytes             `json:"rollingCensusRoot"`
 	CensusURI         string                     `json:"censusURI"`
 	Metadata          string                     `json:"metadata"`
 	CensusOrigin      int32                      `json:"censusOrigin"`

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"go.vocdoni.io/dvote/crypto/ethereum"
+	"go.vocdoni.io/dvote/log"
 	"go.vocdoni.io/dvote/statedb"
 	models "go.vocdoni.io/proto/build/go/models"
 )
@@ -61,6 +62,7 @@ func (v *State) AddToRollingCensus(pid []byte, key []byte, weight *big.Int) erro
 	if err := statedb.SetUint64(noState, keyCensusLen, censusLen+1); err != nil {
 		return err
 	}
+	log.Debugf("DBG AddToRollingCensus %x %x", pid, key)
 	return nil
 }
 

@@ -15,7 +15,6 @@ import (
 	"go.vocdoni.io/dvote/api"
 	"go.vocdoni.io/dvote/crypto"
 	"go.vocdoni.io/dvote/crypto/ethereum"
-	"go.vocdoni.io/dvote/log"
 	"nhooyr.io/websocket"
 )
 
@@ -92,7 +91,8 @@ func (c *Client) Request(req api.MetaRequest, signer *ethereum.SignKeys) (*api.M
 		return nil, fmt.Errorf("%s: %v", method, err)
 	}
 
-	log.Debugf("request: %s", reqBody)
+	// TODO: Uncomment
+	// log.Debugf("request: %s", reqBody)
 	message := []byte{}
 	if c.WS != nil {
 		tctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -116,7 +116,8 @@ func (c *Client) Request(req api.MetaRequest, signer *ethereum.SignKeys) (*api.M
 		}
 		resp.Body.Close()
 	}
-	log.Debugf("response: %s", message)
+	// TODO: Uncomment
+	// log.Debugf("response: %s", message)
 	var respOuter api.ResponseMessage
 	if err := json.Unmarshal(message, &respOuter); err != nil {
 		return nil, fmt.Errorf("%s: %v", method, err)
