@@ -324,7 +324,6 @@ func (r *Router) getProcessCircuitConfig(request RouterRequest) {
 	var response api.MetaResponse
 	var config artifacts.CircuitConfig
 	index := -1
-	log.Debugf("DBG process.RollingCensusSize = %v", *process.RollingCensusSize)
 	var circuits []artifacts.CircuitConfig
 	if genesis, ok := vochain.Genesis[r.vocapp.ChainID()]; ok {
 		circuits = genesis.CircuitsConfig
@@ -333,7 +332,6 @@ func (r *Router) getProcessCircuitConfig(request RouterRequest) {
 		circuits = vochain.Genesis["dev"].CircuitsConfig
 	}
 	for i, cfg := range circuits {
-		log.Debugf("DBG %v config = %+v", cfg)
 		if *process.RollingCensusSize <= uint64(cfg.Parameters[0]) {
 			index = i
 			config = cfg

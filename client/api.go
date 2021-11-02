@@ -725,10 +725,13 @@ func (c *Client) TestSendAnonVotes(
 			ProcessId:   pid,
 			VotePackage: vpb,
 		}
+		// TODO: Generate SNARK proof here.  Inputs:
+		// merkleTreeProof := proofs[i]
+		// zkCensusKey, secretKey := testGetZKCensusKey(s)
+		// rollingCensusRoot := root
 		v.Proof = &models.Proof{
 			Payload: &models.Proof_ZkSnark{
 				ZkSnark: &models.ProofZkSNARK{
-					// TODO
 					CircuitParametersIndex: int32(*circuitIndex),
 					// TODO: Insert SNARK proof here
 					A:            nil,
