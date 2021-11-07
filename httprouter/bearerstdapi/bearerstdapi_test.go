@@ -16,33 +16,30 @@ func TestRouterWithBearerStdAPI(t *testing.T) {
 	r := httprouter.HTTProuter{}
 	rng := testutil.NewRandom(124)
 	port := 23000 + rng.RandomIntn(1024)
-	url := fmt.Sprintf("http://127.0.0.1:%d", port)
+	url := fmt.Sprintf("http://127.0.0.1:%d/api", port)
 	err := r.Init("127.0.0.1", port)
 	qt.Check(t, err, qt.IsNil)
 
 	// Create a standard API handler
-	stdAPI := NewBearerStandardAPI()
-
-	// Add it under namespace "std"
-	r.AddNamespace("std", stdAPI)
+	stdAPI, err := NewBearerStandardAPI(&r, "/api")
 
 	// Add a public handler to serve requests on std namespace
-	r.AddPublicHandler("std", "/hello/*", "POST", func(msg httprouter.Message) {
-		t.Logf("Path: %v Received: %s\n", msg.Path, msg.Data.(*BearerStandardAPIdata).Data)
-		msg.Context.Send([]byte("hello public!"))
-	})
+	stdAPI.RegisterMethod("/hello/*", "POST", MethodAccessTypePublic,
+		func(msg *BearerStandardAPIdata, ctx *httprouter.HTTPContext) error {
+			return ctx.Send([]byte("hello public!"))
+		})
 
 	// Add an admin handler to serve requests on std namespace
-	r.AddAdminHandler("std", "/admin/*", "POST", func(msg httprouter.Message) {
-		t.Logf("Path: %v Received: %s\n", msg.Path, msg.Data.(*BearerStandardAPIdata).Data)
-		msg.Context.Send([]byte("hello admin!"))
-	})
+	stdAPI.RegisterMethod("/admin/*", "POST", MethodAccessTypeAdmin,
+		func(msg *BearerStandardAPIdata, ctx *httprouter.HTTPContext) error {
+			return ctx.Send([]byte("hello admin!"))
+		})
 
 	// Add a private handler
-	r.AddPrivateHandler("std", "/private/*", "POST", func(msg httprouter.Message) {
-		t.Logf("Received: %s", msg.Data.(*BearerStandardAPIdata).Data)
-		msg.Context.Send([]byte("hello private!"))
-	})
+	stdAPI.RegisterMethod("/private/*", "POST", MethodAccessTypePrivate,
+		func(msg *BearerStandardAPIdata, ctx *httprouter.HTTPContext) error {
+			return ctx.Send([]byte("hello private!"))
+		})
 
 	// Set the bearer admin token
 	stdAPI.SetAdminToken("abcd")
