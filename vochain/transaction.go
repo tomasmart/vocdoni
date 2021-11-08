@@ -186,7 +186,7 @@ func (app *BaseApplication) VoteEnvelopeCheck(ve *models.VoteEnvelope, txBytes, 
 		}
 		proof, publicInputsFromUser, err := zk.ProtobufZKProofToCircomProof(proofZkSNARK)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed on zk.ProtobufZKProofToCircomProof: %w", err)
 		}
 		if len(publicInputsFromUser) < 1 {
 			return nil, fmt.Errorf("len(publicInputs)<1, at least need one element (nullifier)")
