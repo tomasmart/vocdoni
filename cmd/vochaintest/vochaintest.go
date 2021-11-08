@@ -446,7 +446,7 @@ func mkTreeAnonVoteTest(host,
 	keysfile string,
 	useLastCensus bool,
 	forceGatewaysGotCensus bool) {
-	// log.Init("debug", "stdout")
+	log.Init("debug", "stdout")
 
 	var censusKeys []*ethereum.SignKeys
 	var proofs [][]byte

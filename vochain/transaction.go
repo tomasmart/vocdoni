@@ -259,6 +259,7 @@ func (app *BaseApplication) VoteEnvelopeCheck(ve *models.VoteEnvelope, txBytes, 
 			}
 			vote.EncryptionKeyIndexes = ve.EncryptionKeyIndexes
 		}
+		// TODO: Verify nullifier!
 
 		// add the vote to cache
 		app.State.CacheAdd(txID, vote)

@@ -344,16 +344,19 @@ type SNARKProof struct {
 }
 
 type SNARKProofInputs struct {
-	CensusRoot     string   `json:"censusRoot"`
-	CensusSiblings []string `json:"censusSiblings"`
-	Index          string   `json:"index"`
-	SecretKey      string   `json:"secretKey"`
-	VoteHash       []string `json:"voteHash"`
-	ProcessID      []string `json:"processId"`
-	Nullifier      string   `json:"nullifier"`
+	CircuitIndex   int                      `json:"circuitIndex"`
+	CircuitConfig  *artifacts.CircuitConfig `json:"circuitConfig"`
+	CensusRoot     string                   `json:"censusRoot"`
+	CensusSiblings []string                 `json:"censusSiblings"`
+	Index          string                   `json:"index"`
+	SecretKey      string                   `json:"secretKey"`
+	VoteHash       []string                 `json:"voteHash"`
+	ProcessID      []string                 `json:"processId"`
+	Nullifier      string                   `json:"nullifier"`
 }
 
-func testGenSNARKProof(censusRoot, merkleProof []byte, treeSize int64,
+func testGenSNARKProof(circuitIndex int, circuitConfig *artifacts.CircuitConfig,
+	censusRoot, merkleProof []byte, treeSize int64,
 	secretKey, votePackage, processId []byte) (*SNARKProof, error) {
 	if len(merkleProof) < 8 {
 		return nil, fmt.Errorf("merkleProof too short")
@@ -391,6 +394,8 @@ func testGenSNARKProof(censusRoot, merkleProof []byte, treeSize int64,
 	}
 
 	inputs := SNARKProofInputs{
+		CircuitIndex:   circuitIndex,
+		CircuitConfig:  circuitConfig,
 		CensusRoot:     arbo.BytesToBigInt(censusRoot).String(),
 		CensusSiblings: siblingsStr,
 		Index:          new(big.Int).SetUint64(index).String(),
@@ -801,7 +806,8 @@ func (c *Client) TestSendAnonVotes(
 			VotePackage: vpb,
 		}
 		_, secretKey := testGetZKCensusKey(s)
-		proof, err := testGenSNARKProof(root, proofs[i], circuitConfig.Parameters[0], secretKey, vpb, pid)
+		proof, err := testGenSNARKProof(*circuitIndex, circuitConfig,
+			root, proofs[i], circuitConfig.Parameters[0], secretKey, vpb, pid)
 		if err != nil {
 			return 0, fmt.Errorf("cannot generate test SNARK proof: %w", err)
 		}
