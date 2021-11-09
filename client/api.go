@@ -336,23 +336,34 @@ func testGetZKCensusKey(s *ethereum.SignKeys) ([]byte, []byte) {
 	return pubKey, secretKey
 }
 
+type SNARKProofCircom struct {
+	A []string   `json:"pi_a"`
+	B [][]string `json:"pi_b"`
+	C []string   `json:"pi_c"`
+	// PublicInputs []string // onl
+}
+
 type SNARKProof struct {
 	A            []string
 	B            []string
 	C            []string
-	PublicInputs []string
+	PublicInputs []string // only nullifier
 }
 
 type SNARKProofInputs struct {
-	CircuitIndex   int                      `json:"circuitIndex"`
-	CircuitConfig  *artifacts.CircuitConfig `json:"circuitConfig"`
-	CensusRoot     string                   `json:"censusRoot"`
-	CensusSiblings []string                 `json:"censusSiblings"`
-	Index          string                   `json:"index"`
-	SecretKey      string                   `json:"secretKey"`
-	VoteHash       []string                 `json:"voteHash"`
-	ProcessID      []string                 `json:"processId"`
-	Nullifier      string                   `json:"nullifier"`
+	CensusRoot     string   `json:"censusRoot"`
+	CensusSiblings []string `json:"censusSiblings"`
+	Index          string   `json:"index"`
+	SecretKey      string   `json:"secretKey"`
+	VoteHash       []string `json:"voteHash"`
+	ProcessID      []string `json:"processId"`
+	Nullifier      string   `json:"nullifier"`
+}
+
+type GenSNARKData struct {
+	CircuitIndex  int                      `json:"circuitIndex"`
+	CircuitConfig *artifacts.CircuitConfig `json:"circuitConfig"`
+	Inputs        SNARKProofInputs         `json:"inputs"`
 }
 
 func testGenSNARKProof(circuitIndex int, circuitConfig *artifacts.CircuitConfig,
@@ -366,6 +377,8 @@ func testGenSNARKProof(circuitIndex int, circuitConfig *artifacts.CircuitConfig,
 	siblingsBytes := merkleProof[8:]
 
 	levels := int(math.Log2(float64(treeSize)))
+	// levels := 3
+	log.Debugf("DBG Tree levels: %v", levels)
 	siblings, err := arbo.UnpackSiblings(arbo.HashFunctionPoseidon, siblingsBytes)
 	if err != nil {
 		return nil, fmt.Errorf("cannot arbo.UnpackSiblings: %w", err)
@@ -394,8 +407,6 @@ func testGenSNARKProof(circuitIndex int, circuitConfig *artifacts.CircuitConfig,
 	}
 
 	inputs := SNARKProofInputs{
-		CircuitIndex:   circuitIndex,
-		CircuitConfig:  circuitConfig,
 		CensusRoot:     arbo.BytesToBigInt(censusRoot).String(),
 		CensusSiblings: siblingsStr,
 		Index:          new(big.Int).SetUint64(index).String(),
@@ -410,24 +421,38 @@ func testGenSNARKProof(circuitIndex int, circuitConfig *artifacts.CircuitConfig,
 		},
 		Nullifier: arbo.BytesToBigInt(nullifier).String(),
 	}
-	inputsJSON, err := json.Marshal(&inputs)
+	data := GenSNARKData{
+		CircuitIndex:  circuitIndex,
+		CircuitConfig: circuitConfig,
+		Inputs:        inputs,
+	}
+	dataJSON, err := json.Marshal(&data)
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("gen-vote-snark.js input: %v", string(inputsJSON))
-	cmd := exec.Command("node", "/app/js/gen-vote-snark.js", string(inputsJSON))
+	log.Debugf("gen-vote-snark.js input: %v", string(dataJSON))
+	cmd := exec.Command("node", "/app/js/gen-vote-snark.js", string(dataJSON))
 	proofJSON, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("node /app/js/gen-vote-snark.js: %w\n%s",
 			err, string(proofJSON))
 	}
 	log.Debugf("gen-vote-snark.js output: %v", string(proofJSON))
-	var proof SNARKProof
-	if err := json.Unmarshal(proofJSON, &proof); err != nil {
+	var proofCircom SNARKProofCircom
+	if err := json.Unmarshal(proofJSON, &proofCircom); err != nil {
 		return nil, fmt.Errorf("/app/js/gen-vote-snark.js output unmarshal: %w\n%s",
 			err, string(proofJSON))
 	}
-	return &proof, nil
+	return &SNARKProof{
+		A: proofCircom.A,
+		B: []string{
+			proofCircom.B[0][0], proofCircom.B[0][1],
+			proofCircom.B[1][0], proofCircom.B[1][1],
+			proofCircom.B[2][0], proofCircom.B[2][1],
+		},
+		C:            proofCircom.C,
+		PublicInputs: []string{arbo.BytesToBigInt(nullifier).String()},
+	}, nil
 }
 
 func (c *Client) TestPreRegisterKeys(
@@ -847,7 +872,7 @@ func (c *Client) TestSendAnonVotes(
 				time.Sleep(1 * time.Second)
 				i--
 			} else {
-				log.Infof("DBG resp: %+v", resp)
+				// log.Infof("DBG resp: %+v", resp)
 				// FIXME: once the req.Message are no longer in hex, remove this
 				msg, err := hex.DecodeString(resp.Message)
 				if err != nil {

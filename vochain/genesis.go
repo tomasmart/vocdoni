@@ -153,10 +153,10 @@ var Genesis = map[string]VochainGenesis{
 		SeedNodes: []string{
 			"7440a5b086e16620ce7b13198479016aa2b07988@seed.dev.vocdoni.net:26656"},
 		CircuitsConfig: []artifacts.CircuitConfig{
-			{ // index: 0, size: 16
+			{ // index: 0, size: 8
 				URL:         "https://raw.githubusercontent.com/vocdoni/zk-circuits-artifacts/master",
 				CircuitPath: "zkcensusproof/dev/16",
-				Parameters:  []int64{16},
+				Parameters:  []int64{8},
 				LocalDir:    "./circuits",
 				VKHash:      hexToBytes("0xf4876aa550e33de1d1f552dc38fa89f6e87e553fd05179e693f82f661cd0c6a0"),
 				ZKeyHash:    hexToBytes("0x7d09a880e14e08143bb66a6f28e13b2707afabc79693ce1613f68083fd70ac31"),
