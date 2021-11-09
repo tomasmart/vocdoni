@@ -377,8 +377,6 @@ func testGenSNARKProof(circuitIndex int, circuitConfig *artifacts.CircuitConfig,
 	siblingsBytes := merkleProof[8:]
 
 	levels := int(math.Log2(float64(treeSize)))
-	// levels := 3
-	log.Debugf("DBG Tree levels: %v", levels)
 	siblings, err := arbo.UnpackSiblings(arbo.HashFunctionPoseidon, siblingsBytes)
 	if err != nil {
 		return nil, fmt.Errorf("cannot arbo.UnpackSiblings: %w", err)
@@ -872,7 +870,6 @@ func (c *Client) TestSendAnonVotes(
 				time.Sleep(1 * time.Second)
 				i--
 			} else {
-				// log.Infof("DBG resp: %+v", resp)
 				// FIXME: once the req.Message are no longer in hex, remove this
 				msg, err := hex.DecodeString(resp.Message)
 				if err != nil {
@@ -893,7 +890,7 @@ func (c *Client) TestSendAnonVotes(
 				return 0, err
 			}
 			if resp.Ok {
-				return 0, fmt.Errorf("double voting detected")
+				return 0, fmt.Errorf("double voting not detected")
 			}
 		}
 	}
