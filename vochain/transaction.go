@@ -89,7 +89,8 @@ func (app *BaseApplication) AddTx(vtx *models.Tx, txBytes, signature []byte,
 		}
 
 	case *models.Tx_SetProcess:
-		if err := SetProcessTxCheck(vtx, txBytes, signature, app.State); err != nil {
+		txSender, err := SetProcessTxCheck(vtx, txBytes, signature, app.State)
+		if err != nil {
 			return []byte{}, fmt.Errorf("setProcess: %w", err)
 		}
 		if commit {
@@ -99,17 +100,17 @@ func (app *BaseApplication) AddTx(vtx *models.Tx, txBytes, signature []byte,
 				if tx.GetStatus() == models.ProcessStatus_PROCESS_UNKNOWN {
 					return []byte{}, fmt.Errorf("set process status, status unknown")
 				}
-				return []byte{}, app.State.SetProcessStatus(tx.ProcessId, *tx.Status, true)
+				return []byte{}, app.State.SetProcessStatus(tx.ProcessId, *tx.Status, txSender, true)
 			case models.TxType_SET_PROCESS_RESULTS:
 				if tx.GetResults() == nil {
 					return []byte{}, fmt.Errorf("set process results, results is nil")
 				}
-				return []byte{}, app.State.SetProcessResults(tx.ProcessId, tx.Results, true)
+				return []byte{}, app.State.SetProcessResults(tx.ProcessId, tx.Results, txSender, true)
 			case models.TxType_SET_PROCESS_CENSUS:
 				if tx.GetCensusRoot() == nil {
 					return []byte{}, fmt.Errorf("set process census, census root is nil")
 				}
-				return []byte{}, app.State.SetProcessCensus(tx.ProcessId, tx.CensusRoot, tx.GetCensusURI(), true)
+				return []byte{}, app.State.SetProcessCensus(tx.ProcessId, tx.CensusRoot, tx.GetCensusURI(), txSender, true)
 			default:
 				return []byte{}, fmt.Errorf("unknown set process tx type")
 			}
