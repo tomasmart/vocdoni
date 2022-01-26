@@ -84,7 +84,16 @@ func genesisGen(cmd *cobra.Command, args []string) error {
 		Block:     vochain.BlockParams(tmConsensusParams.Block),
 		Validator: vochain.ValidatorParams(tmConsensusParams.Validator),
 	}
-	treasurer, _ := cmd.Flags().GetString("treasurer")
+
+	// Get treasurer
+	treasurer, err := cmd.Flags().GetString("treasurer")
+	if err != nil {
+		return err
+	}
+	if treasurer == "" {
+		return fmt.Errorf("treasurer cannot be empty")
+	}
+	// Get chainID
 	chainID, _ := cmd.Flags().GetString("chainId")
 
 	genesisBytes, err := vochain.NewGenesis(nil, chainID, consensusParams, minerPVs, oracles, treasurer)
