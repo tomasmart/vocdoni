@@ -30,8 +30,22 @@ func TestProcessSetStatusTransition(t *testing.T) {
 	if err := app.State.AddOracle(oracle.Address()); err != nil {
 		t.Fatal(err)
 	}
+
+	// create delegate
+	delegate := ethereum.SignKeys{}
+	if err := delegate.Generate(); err != nil {
+		t.Fatal(err)
+	}
+	delegageAcc := &Account{}
+	delegageAcc.Balance = 10000
+	if err := app.State.SetAccount(delegate.Address(), delegageAcc); err != nil {
+		t.Fatal(err)
+	}
+
 	oracleAcc := &Account{}
 	oracleAcc.Balance = 10000
+	oracleAcc.DelegateAddrs = make([][]byte, 1)
+	oracleAcc.DelegateAddrs = append(oracleAcc.DelegateAddrs, delegate.Address().Bytes())
 	if err := app.State.SetAccount(oracle.Address(), oracleAcc); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +64,7 @@ func TestProcessSetStatusTransition(t *testing.T) {
 		Mode:         &models.ProcessMode{Interruptible: true},
 		VoteOptions:  &models.ProcessVoteOptions{MaxCount: 16, MaxValue: 16},
 		Status:       models.ProcessStatus_READY,
-		EntityId:     util.RandomBytes(types.EthereumAddressSize),
+		EntityId:     oracle.Address().Bytes(),
 		CensusRoot:   util.RandomBytes(32),
 		CensusURI:    &censusURI,
 		CensusOrigin: models.CensusOrigin_OFF_CHAIN_TREE,
@@ -70,6 +84,18 @@ func TestProcessSetStatusTransition(t *testing.T) {
 	// Set it to READY (should work)
 	status = models.ProcessStatus_READY
 	if err := testSetProcessStatus(t, pid, &oracle, app, &status); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set it to PAUSE (should work)
+	status = models.ProcessStatus_PAUSED
+	if err := testSetProcessStatus(t, pid, &delegate, app, &status); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set it to READY (should work)
+	status = models.ProcessStatus_READY
+	if err := testSetProcessStatus(t, pid, &delegate, app, &status); err != nil {
 		t.Fatal(err)
 	}
 
@@ -276,7 +302,7 @@ func TestProcessSetResultsTransition(t *testing.T) {
 		EnvelopeType: &models.EnvelopeType{EncryptedVotes: false},
 		Mode:         &models.ProcessMode{Interruptible: true},
 		Status:       models.ProcessStatus_READY,
-		EntityId:     util.RandomBytes(types.EthereumAddressSize),
+		EntityId:     oracle.Address().Bytes(),
 		CensusRoot:   util.RandomBytes(32),
 		CensusURI:    &censusURI,
 		CensusOrigin: models.CensusOrigin_OFF_CHAIN_TREE,
@@ -419,8 +445,32 @@ func TestProcessSetCensusTransition(t *testing.T) {
 	if err := app.State.AddOracle(common.HexToAddress(oracle.AddressString())); err != nil {
 		t.Fatal(err)
 	}
+	// create delegate
+	delegate := ethereum.SignKeys{}
+	if err := delegate.Generate(); err != nil {
+		t.Fatal(err)
+	}
+	delegageAcc := &Account{}
+	delegageAcc.Balance = 10000
+	if err := app.State.SetAccount(delegate.Address(), delegageAcc); err != nil {
+		t.Fatal(err)
+	}
+
+	// create random signer
+	randomSigner := ethereum.SignKeys{}
+	if err := randomSigner.Generate(); err != nil {
+		t.Fatal(err)
+	}
+	randomSignerAcc := &Account{}
+	randomSignerAcc.Balance = 10000
+	if err := app.State.SetAccount(randomSigner.Address(), randomSignerAcc); err != nil {
+		t.Fatal(err)
+	}
+
 	oracleAcc := &Account{}
 	oracleAcc.Balance = 10000
+	oracleAcc.DelegateAddrs = make([][]byte, 1)
+	oracleAcc.DelegateAddrs = append(oracleAcc.DelegateAddrs, delegate.Address().Bytes())
 	if err := app.State.SetAccount(oracle.Address(), oracleAcc); err != nil {
 		t.Fatal(err)
 	}
@@ -439,13 +489,14 @@ func TestProcessSetCensusTransition(t *testing.T) {
 	pid := util.RandomBytes(types.ProcessIDsize)
 	pid2 := util.RandomBytes(types.ProcessIDsize)
 	pid3 := util.RandomBytes(types.ProcessIDsize)
+	pid4 := util.RandomBytes(types.ProcessIDsize)
 	process := &models.Process{
 		ProcessId:    pid,
 		StartBlock:   0,
 		EnvelopeType: &models.EnvelopeType{EncryptedVotes: false},
 		Mode:         &models.ProcessMode{Interruptible: true, DynamicCensus: true},
 		Status:       models.ProcessStatus_READY,
-		EntityId:     util.RandomBytes(types.EthereumAddressSize),
+		EntityId:     oracle.Address().Bytes(),
 		CensusRoot:   util.RandomBytes(32),
 		CensusURI:    &censusURI,
 		CensusOrigin: models.CensusOrigin_OFF_CHAIN_TREE,
@@ -458,7 +509,7 @@ func TestProcessSetCensusTransition(t *testing.T) {
 		EnvelopeType: &models.EnvelopeType{EncryptedVotes: false},
 		Mode:         &models.ProcessMode{Interruptible: true},
 		Status:       models.ProcessStatus_READY,
-		EntityId:     util.RandomBytes(types.EthereumAddressSize),
+		EntityId:     oracle.Address().Bytes(),
 		CensusRoot:   util.RandomBytes(32),
 		CensusURI:    &censusURI2,
 		CensusOrigin: models.CensusOrigin_OFF_CHAIN_TREE,
@@ -471,10 +522,23 @@ func TestProcessSetCensusTransition(t *testing.T) {
 		EnvelopeType: &models.EnvelopeType{EncryptedVotes: false},
 		Mode:         &models.ProcessMode{Interruptible: true, DynamicCensus: true},
 		Status:       models.ProcessStatus_READY,
-		EntityId:     util.RandomBytes(types.EthereumAddressSize),
+		EntityId:     oracle.Address().Bytes(),
 		CensusRoot:   util.RandomBytes(32),
 		CensusURI:    &censusURI2,
 		CensusOrigin: models.CensusOrigin_ERC20,
+		BlockCount:   1024,
+	}
+
+	process4 := &models.Process{
+		ProcessId:    pid4,
+		StartBlock:   0,
+		EnvelopeType: &models.EnvelopeType{EncryptedVotes: false},
+		Mode:         &models.ProcessMode{Interruptible: true, DynamicCensus: true},
+		Status:       models.ProcessStatus_READY,
+		EntityId:     oracle.Address().Bytes(),
+		CensusRoot:   util.RandomBytes(32),
+		CensusURI:    &censusURI,
+		CensusOrigin: models.CensusOrigin_OFF_CHAIN_TREE,
 		BlockCount:   1024,
 	}
 	t.Logf("adding READY process %x", process.ProcessId)
@@ -489,10 +553,26 @@ func TestProcessSetCensusTransition(t *testing.T) {
 	if err := app.State.AddProcess(process3); err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("adding READY process %x", process4.ProcessId)
+	if err := app.State.AddProcess(process4); err != nil {
+		t.Fatal(err)
+	}
 
 	// Set census  (should work)
 	if err := testSetProcessCensus(t, pid, &oracle, app, []byte{1, 2, 3}, &censusURI2); err != nil {
 		t.Fatalf("update census should work if dynamic and off chain census: %s", err)
+	}
+
+	// Set census  (should work)
+	if err := testSetProcessCensus(t, pid4, &delegate, app, []byte{1, 2, 3}, &censusURI2); err != nil {
+		t.Fatalf("update census should work if dynamic and off chain census: %s", err)
+	}
+
+	// Set census  (should not work)
+	if err := testSetProcessCensus(t, pid4, &randomSigner, app, []byte{1, 2, 3}, &censusURI); err != nil {
+		t.Logf("update census should not work if unauthorized account: %s", err)
+	} else {
+		t.Fatal("update census should not work if unauthorized account")
 	}
 
 	// Set census  (should not work)

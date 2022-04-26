@@ -434,7 +434,19 @@ func (app *BaseApplication) NewProcessTxCheck(vtx *models.Tx, txBytes,
 			return nil, common.Address{}, err
 		}
 		if !isOracle {
-			return nil, common.Address{}, fmt.Errorf("unauthorized to create a new process, recovered addr is %s", addr.Hex())
+			// get entityid account
+			eidAddr := common.BytesToAddress(tx.Process.EntityId)
+			eidAcc, err := app.State.GetAccount(eidAddr, false)
+			if err != nil {
+				return nil, common.Address{}, fmt.Errorf("cannot get provided entityId account")
+			}
+			if eidAcc == nil {
+				return nil, common.Address{}, fmt.Errorf("provided entityId account does not exist")
+			}
+			isDelegate := eidAcc.IsDelegate(*addr)
+			if !isDelegate {
+				return nil, common.Address{}, fmt.Errorf("unauthorized to create a new process, recovered addr is %s", addr.Hex())
+			}
 		}
 	}
 	// get process
@@ -529,7 +541,19 @@ func SetProcessTxCheck(vtx *models.Tx, txBytes, signature []byte, state *State) 
 			return common.Address{}, err
 		}
 		if !isOracle {
-			return common.Address{}, fmt.Errorf("unauthorized to set process status, recovered addr is %s", addr.Hex())
+			// get entityid account
+			eidAddr := common.BytesToAddress(process.EntityId)
+			eidAcc, err := state.GetAccount(eidAddr, false)
+			if err != nil {
+				return common.Address{}, fmt.Errorf("cannot get provided entityId account")
+			}
+			if eidAcc == nil {
+				return common.Address{}, fmt.Errorf("provided entityId account does not exist")
+			}
+			isDelegate := eidAcc.IsDelegate(*addr)
+			if !isDelegate {
+				return common.Address{}, fmt.Errorf("unauthorized to create a new process, recovered addr is %s", addr.Hex())
+			}
 		}
 	}
 	switch tx.Txtype {
