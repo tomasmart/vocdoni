@@ -88,6 +88,9 @@ var mainnet = Specs{
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"),
 		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoDomain,
+		},
 	},
 }
 
@@ -124,6 +127,9 @@ var xdai = Specs{
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x00cEBf9E1E81D3CC17fbA0a49306EBA77a8F26cD"),
 		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoDomain,
+		},
 	},
 }
 
@@ -155,9 +161,13 @@ var xdaistage = Specs{
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameEntities: {
-			Domain: types.EntityResolverStageDomain},
+			Domain: types.EntityResolverStageDomain,
+		},
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x693E79F3FD7DC5B3c32D1914E02a932b88397cC7"),
+		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoStageDomain,
 		},
 	},
 }
@@ -190,9 +200,13 @@ var rinkeby = Specs{
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameEntities: {
-			Domain: types.EntityResolverDevelopmentDomain},
+			Domain: types.EntityResolverDevelopmentDomain,
+		},
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"),
+		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoDevelopmentDomain,
 		},
 	},
 }
@@ -225,9 +239,13 @@ var fuji = Specs{
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameEntities: {
-			Domain: types.EntityResolverDevelopmentDomain},
+			Domain: types.EntityResolverDevelopmentDomain,
+		},
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x21a60F4a895769bE78436CC0D83956db83A4297c"),
+		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoDevelopmentDomain,
 		},
 	},
 }
@@ -240,29 +258,33 @@ var avalanche = Specs{
 	NetworkSource: models.SourceNetworkId_AVAX,
 	Contracts: map[string]*ethereumhandler.EthereumContract{
 		ethereumhandler.ContractNameProcesses: {
-			Domain:          types.ProcessesDevelopmentDomain,
+			Domain:          types.ProcessesDomain,
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameNamespaces: {
-			Domain:          types.NamespacesDevelopmentDomain,
+			Domain:          types.NamespacesDomain,
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameTokenStorageProof: {
-			Domain:          types.ERC20ProofsDevelopmentDomain,
+			Domain:          types.ERC20ProofsDomain,
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameGenesis: {
-			Domain:          types.GenesisDevelopmentDomain,
+			Domain:          types.GenesisDomain,
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameResults: {
-			Domain:          types.ResultsDevelopmentDomain,
+			Domain:          types.ResultsDomain,
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameEntities: {
-			Domain: types.EntityResolverDevelopmentDomain},
+			Domain: types.EntityResolverDomain,
+		},
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x0x0"), // this we add once we have the testing done from Fuji
+		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoDomain,
 		},
 	},
 }
@@ -296,9 +318,13 @@ var goerlistage = Specs{
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameEntities: {
-			Domain: types.EntityResolverStageDomain},
+			Domain: types.EntityResolverStageDomain,
+		},
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"),
+		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoStageDomain,
 		},
 	},
 	GenesisHash: goerli.GenesisHash,
@@ -333,9 +359,13 @@ var matic = Specs{
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameEntities: {
-			Domain: types.EntityResolverDomain},
+			Domain: types.EntityResolverDomain,
+		},
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0xffe6ef08Eb7770837b3bBBE04e67eE25cC19a12a"),
+		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoDomain,
 		},
 	},
 }
@@ -368,9 +398,13 @@ var mumbai = Specs{
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameEntities: {
-			Domain: types.EntityResolverDevelopmentDomain},
+			Domain: types.EntityResolverDevelopmentDomain,
+		},
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x841d2f05e00813623edac5f514a21c70e8667b04"),
+		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoDevelopmentDomain,
 		},
 	},
 }
@@ -404,9 +438,13 @@ var goerli = Specs{
 			ListenForEvents: true,
 		},
 		ethereumhandler.ContractNameEntities: {
-			Domain: types.EntityResolverDevelopmentDomain},
+			Domain: types.EntityResolverDevelopmentDomain,
+		},
 		ethereumhandler.ContractNameENSregistry: {
 			Address: common.HexToAddress("0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"),
+		},
+		ethereumhandler.ContractNameERC20Info: {
+			Domain: types.ERC20InfoDevelopmentDomain,
 		},
 	},
 	GenesisHash: "0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a",

@@ -100,6 +100,14 @@ const (
 	// ResultsDevelopmentDomain
 	ResultsDevelopmentDomain = "results.dev.voc.eth"
 
+	// ERC20 INFO
+	// ERC20InfoDomain
+	ERC20InfoDomain = "erc20info.voc.eth"
+	// Erc20InfoStageDomain
+	ERC20InfoStageDomain = "erc20info.stg.voc.eth"
+	// Erc20InfoDevelopmentDomain
+	ERC20InfoDevelopmentDomain = "erc20info.dev.voc.eth"
+
 	// EntityMetaKey is the key of an ENS text record for the entity metadata
 	EntityMetaKey = "vnd.vocdoni.meta"
 

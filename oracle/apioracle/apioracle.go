@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"time"
 
+	ethbind "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vocdoni/storage-proofs-eth-go/token/mapbased"
 	"go.vocdoni.io/dvote/api"
@@ -114,6 +115,14 @@ func (a *APIoracle) handleNewEthProcess(req *api.APIrequest) (*api.APIresponse, 
 
 	ctx, cancel := context.WithTimeout(context.Background(), ethQueryTimeOut)
 	defer cancel()
+	// set token decimals
+	tokenDecimals, err := a.getTokenDecimals(context.Background(), common.BytesToAddress(p.EntityId))
+	if err != nil {
+		log.Warnf("cannot get token decimals for token %x", p.EntityId)
+	}
+	p.TokenDecimals = new(uint32)
+	*p.TokenDecimals = uint32(tokenDecimals)
+	// get index slot
 	index, err := a.getIndexSlot(ctx, p.EntityId, p.GetSourceBlockHeight(), p.CensusRoot)
 	if err != nil {
 		return nil, err
@@ -126,6 +135,7 @@ func (a *APIoracle) handleNewEthProcess(req *api.APIrequest) (*api.APIresponse, 
 	if req.EthProof == nil {
 		return nil, fmt.Errorf("storage proof is nil")
 	}
+	// verify proof
 	err = mapbased.VerifyProof(*req.Address(), common.BytesToHash(p.CensusRoot),
 		*req.EthProof, int(index), new(big.Int).SetBytes(req.EthProof.Value), nil)
 
@@ -179,4 +189,8 @@ func (a *APIoracle) getIndexSlot(ctx context.Context, contractAddr []byte,
 func (a *APIoracle) getStorageRoot(ctx context.Context, contractAddr common.Address,
 	blockNum uint64) (hash common.Hash, err error) {
 	return a.eh.GetStorageRoot(ctx, contractAddr, big.NewInt(int64(blockNum)))
+}
+
+func (a *APIoracle) getTokenDecimals(ctx context.Context, contractAddr common.Address) (uint8, error) {
+	return a.eh.ERC20Info.Decimals(&ethbind.CallOpts{Context: ctx}, contractAddr)
 }

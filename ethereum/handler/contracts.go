@@ -21,6 +21,7 @@ const (
 	ContractNameGenesis           = "genesis"
 	ContractNameResults           = "results"
 	ContractNameEntities          = "entities"
+	ContractNameERC20Info         = "erc20Info"
 )
 
 // EthereumContract wraps basic smartcontract information
@@ -68,6 +69,10 @@ func (ec *EthereumContract) SetABI(contractName string) error {
 	// entity resolver and public resolver have the same ABI
 	case ContractNameENSresolver:
 		if ec.ABI, err = abi.JSON(strings.NewReader(contracts.EntityResolverABI)); err != nil {
+			return fmt.Errorf("cannot read public resolver contract abi: %w", err)
+		}
+	case ContractNameERC20Info:
+		if ec.ABI, err = abi.JSON(strings.NewReader(contracts.ERC20InfoABI)); err != nil {
 			return fmt.Errorf("cannot read public resolver contract abi: %w", err)
 		}
 	}

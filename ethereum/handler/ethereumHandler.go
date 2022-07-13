@@ -40,6 +40,7 @@ type EthereumHandler struct {
 	EntityResolver    *contracts.EntityResolver
 	ENSPublicRegistry *contracts.EnsRegistryWithFallback
 	ENSPublicResolver *contracts.EntityResolver
+	ERC20Info         *contracts.ERC20Info
 	EthereumClient    *ethclient.Client
 	EthereumRPC       *ethrpc.Client
 	Endpoint          string
@@ -233,6 +234,10 @@ func (eh *EthereumHandler) SetContractInstance(ec *EthereumContract) error {
 		if eh.ENSPublicRegistry, err = contracts.NewEnsRegistryWithFallback(ec.Address, eh.EthereumClient); err != nil {
 			return fmt.Errorf("error constructing results contract transactor: %w", err)
 		}
+	case strings.HasPrefix(ec.Domain, ContractNameERC20Info):
+		if eh.ERC20Info, err = contracts.NewERC20Info(ec.Address, eh.EthereumClient); err != nil {
+			return fmt.Errorf("error constructing erc20Info contract transactor: %w", err)
+		}
 	}
 	return nil
 }
@@ -278,6 +283,18 @@ func (eh *EthereumHandler) NewProcessTxArgs(ctx context.Context, pid [types.Proc
 		return nil, fmt.Errorf("census origin: %d not supported", censusOrigin)
 	}
 	processData.CensusOrigin = censusOrigin
+
+	if censusOrigin == models.CensusOrigin_ERC20 || censusOrigin == models.CensusOrigin_ERC1155 ||
+		censusOrigin == models.CensusOrigin_ERC721 || censusOrigin == models.CensusOrigin_ERC777 ||
+		censusOrigin == models.CensusOrigin_MINI_ME {
+		tokenDecimals, err := eh.ERC20Info.Decimals(&ethbind.CallOpts{Context: ctx}, processMeta.EntityAddressOwner[0])
+		if err != nil {
+			log.Warnf("cannot get token decimals for %s", processData.EntityId)
+		} else {
+			processData.TokenDecimals = new(uint32)
+			*processData.TokenDecimals = uint32(tokenDecimals)
+		}
+	}
 
 	// census URI
 	if vochain.CensusOrigins[censusOrigin].NeedsURI && len(processMeta.MetadataCensusRootCensusUri[2]) == 0 {
