@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"go.vocdoni.io/dvote/httprouter"
 	"go.vocdoni.io/dvote/log"
@@ -36,6 +37,7 @@ type BearerStandardAPI struct {
 	authTokens     sync.Map
 	adminToken     string
 	adminTokenLock sync.RWMutex
+	verboseLog     bool
 }
 
 // BearerStandardAPIdata is the data type used by the BearerStandardAPI.
@@ -77,6 +79,9 @@ func (b *BearerStandardAPI) AuthorizeRequest(data interface{},
 	msg, ok := data.(*BearerStandardAPIdata)
 	if !ok {
 		panic("type is not bearerStandardApi")
+	}
+	if b.verboseLog {
+		fmt.Printf("[BearerAPI][%s][%s] {%s}", time.Now(), msg.AuthToken, msg.Data)
 	}
 	switch accessType {
 	case httprouter.AccessTypeAdmin:
@@ -185,4 +190,9 @@ func (b *BearerStandardAPI) GetAuthTokens(bearerToken string) int64 {
 		return 0
 	}
 	return ts.(int64)
+}
+
+// EnableVerboseLog prints auth token info and HTTP data to stdout
+func (b *BearerStandardAPI) EnableVerboseLog() {
+	b.verboseLog = true
 }
