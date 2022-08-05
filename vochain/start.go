@@ -4,6 +4,7 @@ package vochain
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,8 +26,21 @@ import (
 
 // NewVochain starts a node with an ABCI application
 func NewVochain(vochaincfg *config.VochainCfg, genesis []byte) *BaseApplication {
+	if vochaincfg.SnapshotURL != "" {
+		log.Infof("importing snapshot...")
+		snapshotPath, err := FetchFile(filepath.Join(vochaincfg.DataDir, "snapshot"), vochaincfg.SnapshotURL)
+		if err != nil {
+			log.Fatalf("cannot download snapshot: %s", err)
+		}
+		log.Infof("snapshot successfully downloaded!")
+		if vochaincfg.ForceResync {
+			if err := restoreStateFromSnapshot(filepath.Join(vochaincfg.DataDir, "data"), snapshotPath); err != nil {
+				log.Fatalf("cannot restore state from snapshot: %s", err)
+			}
+		}
+	}
 	// creating new vochain app
-	app, err := NewBaseApplication(vochaincfg.DataDir + "/data")
+	app, err := NewBaseApplication(filepath.Join(vochaincfg.DataDir, "data"))
 	if err != nil {
 		log.Fatalf("cannot initialize vochain application: %s", err)
 	}
@@ -334,4 +348,20 @@ func AminoKeys(key crypto25519.PrivKey) (private, public []byte, err error) {
 	}
 
 	return aminoKey, aminoPubKey, nil
+}
+
+// restoreStateFromSnapshot overrides the node data with a given snapshot
+func restoreStateFromSnapshot(dataDir, src string) error {
+	log.Infof("cleaning up old datadir %s before applying the snapshot", dataDir)
+	if err := os.RemoveAll(dataDir); err != nil {
+		return fmt.Errorf("cannot clean old datadir: %w", err)
+	}
+	log.Infof("decompressing snapshot ...")
+	if err := Untar(
+		src,
+		strings.TrimSuffix(dataDir, "/data"),
+	); err != nil {
+		return fmt.Errorf("error decompressing snapshot %w", err)
+	}
+	return nil
 }
