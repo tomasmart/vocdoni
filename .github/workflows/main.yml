@@ -16,26 +16,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: gofmt
-        # Run gofmt first, as it's quick and issues are common.
-        run: diff -u <(echo -n) <(gofmt -s -d $(git ls-files '*.go'))
-      - name: go test
+      - name: debug
         run: |
-          # we run vet in another step
-          go test -vet=off -timeout=1m -coverprofile=covprofile ./...
-          # -race can easily make the crypto stuff 10x slower
-          go test -vet=off -timeout=15m -race ./...
-      - name: go vet
-        run: go vet ./...
-      - name: staticcheck
-        run: |
-          curl -L https://github.com/dominikh/go-tools/releases/download/2022.1.2/staticcheck_linux_amd64.tar.gz | tar -xzf -
-          ./staticcheck/staticcheck ./...
-      - name: Go build for Mac
-        run: |
-          # Some of our devs are on Mac. Ensure it builds.
-          # It's surprisingly hard with some deps like bazil.org/fuse.
-          GOOS=darwin go build ./...
+          pwd -L
+          pwd -P
+          whoami || true
+          ls -ld /github/ || true
+          ls -ld /github/home/ || true
+          ls -ld /github/home/.cache/ || true
+          ls -ld /github/home/.cache/go-build/ || true
+          ls -ld /github/home/.cache/go-build/fc/ || true
+          ls -ld /github/home/.cache/go-build/fc/fc0c834f7738ff86f05ec60adbd5736130df7c72423ddd801e9349680096154d-d || true
+          ls -l /github/home/.cache/go-build/fc/ || true
 
   compose-test:
     runs-on: self-hosted
@@ -43,17 +35,6 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
-      - name: Run compose script
-        run: |
-          export COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1
-          export DOCKER_CLI_EXPERIMENTAL=enabled
-          export COMPOSE_PROJECT_NAME=${RANDOM}${RANDOM}_testsuite
-          export TESTSUITE_BUILD_TAG=${CI_COMMIT_SHA::10}
-          export COMPOSE_HOST_PATH=${PWD}/dockerfiles/testsuite
-          export COMPOSE_DVOTE_PORT_MAPPING="9090" # Will use a random available port mapping
-          cd dockerfiles/testsuite
-          docker-compose build
-          ./start_test.sh
 
   docker-release:
     runs-on: self-hosted
