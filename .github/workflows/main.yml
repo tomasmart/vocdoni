@@ -25,6 +25,11 @@ jobs:
           ls -ld /github/home/.cache/go-build/ || true
           find ~/.cache -not -user `id --user` -print0 | xargs -0 ls -ld || true
           find ~/.cache -user `id --user` -print0 | xargs -0 ls -ld || true
+          epoch=$(date +%s)
+          mv ~/.cache ~/.cache-broken-by-root-$epoch
+          # cp -pr ~/.cache-broken-by-root-$epoch ~/.cache
+          ls -ld ~/.cache*
+          find ~/.cache -not -user `id --user` -print0 | xargs -0 ls -ld || true
 
   compose-test:
     runs-on: self-hosted
