@@ -24,6 +24,7 @@ jobs:
           ls -ld /github/home/.cache/ || true
           ls -ld /github/home/.cache/go-build/ || true
           find ~/.cache -not -user `id --user` -print0 | xargs -0 ls -ld || true
+          find ~/.cache -user `id --user` -print0 | xargs -0 ls -ld || true
 
   compose-test:
     runs-on: self-hosted
