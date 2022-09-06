@@ -16,20 +16,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: debug
+      - name: debug go cache permissions
         run: |
-          pwd -L
-          pwd -P
           whoami || true
           ls -ld /github/ || true
           ls -ld /github/home/ || true
           ls -ld /github/home/.cache/ || true
           ls -ld /github/home/.cache/go-build/ || true
-          ls -ld /github/home/.cache/go-build/fc/ || true
-          ls -ld /github/home/.cache/go-build/fc/fc0c834f7738ff86f05ec60adbd5736130df7c72423ddd801e9349680096154d-d || true
-          ls -l /github/home/.cache/go-build/fc/ || true
-          echo
-          find ~/.cache -not -user 1000 || true
+          find ~/.cache -not -user `id --user` -print0 | xargs -0 ls -ld || true
 
   compose-test:
     runs-on: self-hosted
