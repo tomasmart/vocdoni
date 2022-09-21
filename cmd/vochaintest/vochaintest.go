@@ -1489,39 +1489,7 @@ func testCollectFaucet(mainClient *client.Client, from, to *ethereum.SignKeys) e
 
 func testVocli(url, treasurerPrivKey string) {
 	vocli.SetupLogPackage = false
-	executeCommand := func(root *cobra.Command, args []string, input string, verbose bool) (*cobra.Command, string, string, error) {
-		// setup stdout/stderr redirection.
-		stdoutBuf := new(bytes.Buffer)
-		stderrBuf := new(bytes.Buffer)
-		vocli.Stdout = stdoutBuf
-		vocli.Stderr = stderrBuf
 
-		stdinReader, stdinWriter, err := os.Pipe()
-		if err != nil {
-			return root, "", "", err
-		}
-		stdinWriter.Write([]byte(input))
-		vocli.Stdin = stdinReader
-
-		// cobra.Command.SetOut/SetErr() is actually useless for most purposes as it
-		// only includes the usage messages printed to stdout/stderr. For full
-		// stdout/stderr capture it's still best to use vocli.Stdout/Stderr. Let's
-		// just mock it out anyway.
-		root.SetOut(stdoutBuf)
-		root.SetErr(stderrBuf)
-		root.SetArgs(args)
-		c, err := root.ExecuteC()
-
-		if verbose {
-			log.Debug("vocli ", strings.Join(args, " "))
-			log.Debugf("stdout(%s)\tstderr(%s)", stdoutBuf, stderrBuf)
-		}
-
-		root.SetOut(os.Stdout)
-		root.SetErr(os.Stderr)
-		root.SetArgs([]string{})
-		return c, stdoutBuf.String(), stderrBuf.String(), err
-	}
 	parseImportOutput := func(stdout string) (address, keyPath string) {
 		a := strings.TrimSpace(addressRegexp.FindString(stdout))
 		a2 := strings.Split(a, " ")
@@ -1725,4 +1693,38 @@ func testVocli(url, treasurerPrivKey string) {
 		finalTxCosts := strings.Split(strings.TrimSpace(stdout), "\n")
 		log.Infof("new tx cost: %+v", finalTxCosts)
 	}()
+}
+
+func executeCommand(root *cobra.Command, args []string, input string, verbose bool) (*cobra.Command, string, string, error) {
+	// setup stdout/stderr redirection.
+	stdoutBuf := new(bytes.Buffer)
+	stderrBuf := new(bytes.Buffer)
+	vocli.Stdout = stdoutBuf
+	vocli.Stderr = stderrBuf
+
+	stdinReader, stdinWriter, err := os.Pipe()
+	if err != nil {
+		return root, "", "", err
+	}
+	stdinWriter.Write([]byte(input))
+	vocli.Stdin = stdinReader
+
+	// cobra.Command.SetOut/SetErr() is actually useless for most purposes as it
+	// only includes the usage messages printed to stdout/stderr. For full
+	// stdout/stderr capture it's still best to use vocli.Stdout/Stderr. Let's
+	// just mock it out anyway.
+	root.SetOut(stdoutBuf)
+	root.SetErr(stderrBuf)
+	root.SetArgs(args)
+	c, err := root.ExecuteC()
+
+	if verbose {
+		log.Debug("vocli ", strings.Join(args, " "))
+		log.Debugf("stdout(%s)\tstderr(%s)", stdoutBuf, stderrBuf)
+	}
+
+	root.SetOut(os.Stdout)
+	root.SetErr(os.Stderr)
+	root.SetArgs([]string{})
+	return c, stdoutBuf.String(), stderrBuf.String(), err
 }
