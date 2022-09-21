@@ -41,8 +41,10 @@ var ops = map[string]bool{
 	"initaccounts":      true,
 }
 
-var addressRegexp = regexp.MustCompile("Public address of the key:.*")
-var pathRegexp = regexp.MustCompile("Path of the secret key file:.*")
+var (
+	addressRegexp = regexp.MustCompile("Public address of the key:.*")
+	pathRegexp    = regexp.MustCompile("Path of the secret key file:.*")
+)
 
 func opsAvailable() (opsav []string) {
 	for k := range ops {
@@ -286,7 +288,8 @@ func ensureProcessCreated(mainClient *client.Client,
 	startBlockIncrement int,
 	duration int,
 	maxCensusSize uint64,
-	retries int) (uint32, []byte, error) {
+	retries int,
+) (uint32, []byte, error) {
 	for i := 0; i < retries; i++ {
 		start, pid, err := mainClient.CreateProcess(
 			signer,
@@ -334,6 +337,7 @@ func ensureProcessEnded(mainClient *client.Client, signer *ethereum.SignKeys, pr
 	}
 	return fmt.Errorf("ensureProcessEnded: process may not be ended after %d blocks", retries)
 }
+
 func initAccounts(treasurer, oracle string, accountKeys []*ethereum.SignKeys, host string) error {
 	var err error
 	treasurerSigner, err := privKeyToSigner(treasurer)
@@ -407,7 +411,8 @@ func ensureAccountHasTokens(mainClient *client.Client,
 	treasurer *ethereum.SignKeys,
 	accountAddr common.Address,
 	amount uint64,
-	retries int) error {
+	retries int,
+) error {
 	for i := 0; i < retries; i++ {
 		// if balance is enough, we're done
 		if acct, _ := mainClient.GetAccount(accountAddr); acct != nil && acct.Balance > 1000 {
@@ -439,8 +444,8 @@ func mkTreeVoteTest(host string,
 	gateways []string,
 	keysfile string,
 	useLastCensus bool,
-	forceGatewaysGotCensus bool) {
-
+	forceGatewaysGotCensus bool,
+) {
 	var censusKeys []*ethereum.SignKeys
 	var proofs []*client.Proof
 	var err error
@@ -653,7 +658,8 @@ func mkTreeAnonVoteTest(host string,
 	gateways []string,
 	keysfile string,
 	useLastCensus bool,
-	forceGatewaysGotCensus bool) {
+	forceGatewaysGotCensus bool,
+) {
 	// log.Init("debug", "stdout")
 
 	var censusKeys []*ethereum.SignKeys
@@ -1521,10 +1527,10 @@ func testCollectFaucet(mainClient *client.Client, from, to *ethereum.SignKeys) e
 
 func testVocli(url, treasurerPrivKey string) {
 	vocli.SetupLogPackage = false
-	var executeCommand = func(root *cobra.Command, args []string, input string, verbose bool) (*cobra.Command, string, string, error) {
+	executeCommand := func(root *cobra.Command, args []string, input string, verbose bool) (*cobra.Command, string, string, error) {
 		// setup stdout/stderr redirection.
-		var stdoutBuf = new(bytes.Buffer)
-		var stderrBuf = new(bytes.Buffer)
+		stdoutBuf := new(bytes.Buffer)
+		stderrBuf := new(bytes.Buffer)
 		vocli.Stdout = stdoutBuf
 		vocli.Stderr = stderrBuf
 
@@ -1554,7 +1560,7 @@ func testVocli(url, treasurerPrivKey string) {
 		root.SetArgs([]string{})
 		return c, stdoutBuf.String(), stderrBuf.String(), err
 	}
-	var parseImportOutput = func(stdout string) (address, keyPath string) {
+	parseImportOutput := func(stdout string) (address, keyPath string) {
 		a := strings.TrimSpace(addressRegexp.FindString(stdout))
 		a2 := strings.Split(a, " ")
 		newAddr := a2[len(a2)-1]
@@ -1564,7 +1570,7 @@ func testVocli(url, treasurerPrivKey string) {
 		keyPath = k2[len(k2)-1]
 		return newAddr, keyPath
 	}
-	var ensureSetAccountInfoMined = func(address string, stdArgs []string) (string, error) {
+	ensureSetAccountInfoMined := func(address string, stdArgs []string) (string, error) {
 		// 50% of the time the SetAccountInfoTx doesn't get mined even in 2, 3x the block period
 		// so keep polling until we finally confirm the account has been created
 		for i := 1; i < 20; i++ {
@@ -1576,7 +1582,7 @@ func testVocli(url, treasurerPrivKey string) {
 		}
 		return "", fmt.Errorf("cannot ensure account was mined after 20 attempts")
 	}
-	var generateKeyAndReturnAddress = func(url string, stdArgs []string) (address, keyPath string, err error) {
+	generateKeyAndReturnAddress := func(url string, stdArgs []string) (address, keyPath string, err error) {
 		_, stdout, _, err := executeCommand(vocli.RootCmd, append([]string{"keys", "new", fmt.Sprintf("-u=%s", url)}, stdArgs...), "", false)
 		if err != nil {
 			return
@@ -1602,7 +1608,7 @@ func testVocli(url, treasurerPrivKey string) {
 	stdArgs := []string{"--password=password", fmt.Sprintf("--home=%s", dir), fmt.Sprintf("-u=%s", url)}
 
 	log.Info("vocli keys import alicePrivateKey")
-	if err := ioutil.WriteFile(path.Join(dir, "alicePrivateKey"), []byte(treasurerPrivKey), 0700); err != nil {
+	if err := ioutil.WriteFile(path.Join(dir, "alicePrivateKey"), []byte(treasurerPrivKey), 0o700); err != nil {
 		log.Fatal(err)
 	}
 	_, stdout, _, err := executeCommand(vocli.RootCmd, append([]string{"keys", "import", path.Join(dir, "/alicePrivateKey")}, stdArgs...), "", true)
