@@ -195,14 +195,21 @@ func privKeyToSigner(key string) (*ethereum.SignKeys, error) {
 	return skey, nil
 }
 
-// newClient will open a connection to addr.
+// testClient is a *client.Client but with additional methods
+// that are useful only in tests,
+// like waitUntilAccountExists or ensureProcessCreated
+type testClient struct {
+	*client.Client
+}
+
+// newTestClient will open a connection to addr.
 // If it fails, it will retry 10 times (with 1s interval)
 // before giving up
-func newClient(addr string) (*client.Client, error) {
+func newTestClient(addr string) (*testClient, error) {
 	for tries := 10; tries > 0; tries-- {
 		c, err := client.New(addr)
 		if err == nil {
-			return c, nil
+			return &testClient{c}, nil
 		}
 		time.Sleep(1 * time.Second)
 	}
@@ -240,7 +247,7 @@ func censusGenerate(host string, signer *ethereum.SignKeys, size int, filepath s
 
 func censusImport(host string, signer *ethereum.SignKeys) {
 	// Connect
-	cl, err := newClient(host)
+	cl, err := newTestClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -273,7 +280,7 @@ func censusImport(host string, signer *ethereum.SignKeys) {
 	log.Infof("Census created and published\nRoot: %x\nURI: %s", root, uri)
 }
 
-func ensureProcessCreated(mainClient *client.Client,
+func (mainClient testClient) ensureProcessCreated(
 	signer *ethereum.SignKeys,
 	entityID common.Address,
 	censusRoot []byte,
@@ -315,7 +322,7 @@ func ensureProcessCreated(mainClient *client.Client,
 	return 0, nil, fmt.Errorf("ensureProcessCreated: process may not be created after %d blocks", retries)
 }
 
-func ensureProcessEnded(mainClient *client.Client, signer *ethereum.SignKeys, processID types.ProcessID, retries int) error {
+func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, processID types.ProcessID, retries int) error {
 	for i := 0; i <= retries; i++ {
 		_ = mainClient.EndProcess(signer, processID)
 		mainClient.WaitUntilNextBlock()
@@ -346,7 +353,7 @@ func initAccounts(treasurer, oracle string, accountKeys []*ethereum.SignKeys, ho
 	}
 	log.Infof("connecting to main gateway %s", host)
 	// connecting to endpoint
-	mainClient, err := newClient(host)
+	mainClient, err := newTestClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -354,22 +361,22 @@ func initAccounts(treasurer, oracle string, accountKeys []*ethereum.SignKeys, ho
 
 	retries := 10
 	// create and top up accounts
-	if err := ensureAccountExists(mainClient, oracleSigner, retries); err != nil {
+	if err := mainClient.ensureAccountExists(oracleSigner, retries); err != nil {
 		log.Fatal(err)
 	}
 	log.Infof("created oracle account with address %s", oracleSigner.Address())
-	if err := ensureAccountHasTokens(mainClient, treasurerSigner, oracleSigner.Address(), 100000, retries); err != nil {
+	if err := mainClient.ensureAccountHasTokens(treasurerSigner, oracleSigner.Address(), 100000, retries); err != nil {
 		return fmt.Errorf("cannot mint tokens for account %s with treasurer %s: %w", oracleSigner.Address(), treasurerSigner.Address(), err)
 	}
 	log.Infof("minted 100000 tokens to oracle")
 
 	for _, k := range accountKeys {
 		mainClient.WaitUntilNextBlock()
-		if err := ensureAccountExists(mainClient, k, retries); err != nil {
+		if err := mainClient.ensureAccountExists(k, retries); err != nil {
 			return fmt.Errorf("cannot check if account exists: %w", err)
 		}
 		log.Infof("created entity key account with addresses: %s", k.Address())
-		if err := ensureAccountHasTokens(mainClient, treasurerSigner, k.Address(), 100000, retries); err != nil {
+		if err := mainClient.ensureAccountHasTokens(treasurerSigner, k.Address(), 100000, retries); err != nil {
 			return fmt.Errorf("cannot mint tokens for account %s with treasurer %s: %w", k.Address(), treasurerSigner.Address(), err)
 		}
 		log.Infof("minted 100000 tokens to account %s", k.Address())
@@ -377,7 +384,7 @@ func initAccounts(treasurer, oracle string, accountKeys []*ethereum.SignKeys, ho
 	return nil
 }
 
-func ensureAccountExists(mainClient *client.Client, account *ethereum.SignKeys, retries int) error {
+func (mainClient testClient) ensureAccountExists(account *ethereum.SignKeys, retries int) error {
 	for i := 0; i < retries; i++ {
 		// if account exists, we're done
 		if acct, _ := mainClient.GetAccount(account.Address()); acct != nil {
@@ -396,7 +403,7 @@ func ensureAccountExists(mainClient *client.Client, account *ethereum.SignKeys, 
 	return fmt.Errorf("cannot create account %s after %d retries", account.Address(), retries)
 }
 
-func ensureAccountHasTokens(mainClient *client.Client,
+func (mainClient testClient) ensureAccountHasTokens(
 	treasurer *ethereum.SignKeys,
 	accountAddr common.Address,
 	amount uint64,
@@ -460,9 +467,9 @@ func mkTreeVoteTest(host string,
 
 	log.Infof("connecting to main gateway %s", host)
 	// Add the first connection, this will be the main connection
-	var clients []*client.Client
+	var clients []*testClient
 
-	mainClient, err := newClient(host)
+	mainClient, err := newTestClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -471,8 +478,7 @@ func mkTreeVoteTest(host string,
 	// Create process
 	pid := client.Random(32)
 	log.Infof("creating process with entityID: %s", entityKey.AddressString())
-	start, pid, err := ensureProcessCreated(
-		mainClient,
+	start, pid, err := mainClient.ensureProcessCreated(
 		entityKey,
 		entityKey.Address(),
 		censusRoot,
@@ -494,7 +500,7 @@ func mkTreeVoteTest(host string,
 
 	for i := 0; i < parallelCons; i++ {
 		log.Infof("opening gateway connection to %s", gwList[i%len(gwList)])
-		cl, err := newClient(gwList[i%len(gwList)])
+		cl, err := newTestClient(gwList[i%len(gwList)])
 		if err != nil {
 			log.Warn(err)
 			continue
@@ -612,7 +618,7 @@ func mkTreeVoteTest(host string,
 	}
 
 	log.Infof("ending process in order to fetch the results")
-	if err := ensureProcessEnded(mainClient, entityKey, pid, 5); err != nil {
+	if err := mainClient.ensureProcessEnded(entityKey, pid, 5); err != nil {
 		log.Fatal(err)
 	}
 	maxVotingTime := time.Duration(0)
@@ -669,9 +675,8 @@ func mkTreeAnonVoteTest(host string,
 
 	log.Infof("connecting to main gateway %s", host)
 	// Add the first connection, this will be the main connection
-	var clients []*client.Client
-
-	mainClient, err := newClient(host)
+	var clients []*testClient
+	mainClient, err := newTestClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -679,8 +684,7 @@ func mkTreeAnonVoteTest(host string,
 
 	// Create process
 	log.Infof("creating process with entityID: %s", entityKey.AddressString())
-	start, pid, err := ensureProcessCreated(
-		mainClient,
+	start, pid, err := mainClient.ensureProcessCreated(
 		entityKey,
 		entityKey.Address(),
 		censusRoot,
@@ -702,7 +706,7 @@ func mkTreeAnonVoteTest(host string,
 
 	for i := 0; i < parallelCons; i++ {
 		log.Infof("opening gateway connection to %s", gwList[i%len(gwList)])
-		cl, err := newClient(gwList[i%len(gwList)])
+		cl, err := newTestClient(gwList[i%len(gwList)])
 		if err != nil {
 			log.Warn(err)
 			continue
@@ -899,7 +903,7 @@ func mkTreeAnonVoteTest(host string,
 
 	log.Infof("ending process in order to fetch the results")
 	// also checks oracle permissions
-	if err := ensureProcessEnded(mainClient, entityKey, pid, 5); err != nil {
+	if err := mainClient.ensureProcessEnded(entityKey, pid, 5); err != nil {
 		log.Fatal(err)
 	}
 	maxVotingTime := time.Duration(0)
@@ -942,9 +946,9 @@ func cspVoteTest(
 
 	log.Infof("connecting to main gateway %s", host)
 	// Add the first connection, this will be the main connection
-	var clients []*client.Client
+	var clients []*testClient
 
-	mainClient, err := newClient(host)
+	mainClient, err := newTestClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -953,8 +957,7 @@ func cspVoteTest(
 	// Create process
 	pid := client.Random(32)
 	log.Infof("creating process with entityID: %s", entityKey.AddressString())
-	start, pid, err := ensureProcessCreated(
-		mainClient,
+	start, pid, err := mainClient.ensureProcessCreated(
 		entityKey,
 		entityKey.Address(),
 		cspKey.PublicKey(),
@@ -976,7 +979,7 @@ func cspVoteTest(
 
 	for i := 0; i < parallelCons; i++ {
 		log.Infof("opening gateway connection to %s", gwList[i%len(gwList)])
-		cl, err := newClient(gwList[i%len(gwList)])
+		cl, err := newTestClient(gwList[i%len(gwList)])
 		if err != nil {
 			log.Warn(err)
 			continue
@@ -987,7 +990,7 @@ func cspVoteTest(
 
 	for i := 0; i < parallelCons; i++ {
 		log.Infof("opening gateway connection to %s", gwList[i%len(gwList)])
-		cl, err := newClient(gwList[i%len(gwList)])
+		cl, err := newTestClient(gwList[i%len(gwList)])
 		if err != nil {
 			log.Warn(err)
 			continue
@@ -1044,7 +1047,7 @@ func cspVoteTest(
 	wg.Wait()
 
 	log.Infof("ending process in order to fetch the results")
-	if err := ensureProcessEnded(mainClient, entityKey, pid, 5); err != nil {
+	if err := mainClient.ensureProcessEnded(entityKey, pid, 5); err != nil {
 		log.Fatal(err)
 	}
 	maxVotingTime := time.Duration(0)
@@ -1085,34 +1088,34 @@ func testTokenTransactions(
 	}
 
 	log.Infof("connecting to main gateway %s", host)
-	mainClient, err := newClient(host)
+	mainClient, err := newTestClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer mainClient.Close()
 
 	// check set transaction cost
-	if err := testSetTxCost(mainClient, treasurerSigner); err != nil {
+	if err := testSetTxCost(mainClient.Client, treasurerSigner); err != nil {
 		log.Fatal(err)
 	}
 
 	// check create and set account
-	if err := testCreateAndSetAccount(mainClient, treasurerSigner, mainSigner, otherSigner); err != nil {
+	if err := testCreateAndSetAccount(mainClient.Client, treasurerSigner, mainSigner, otherSigner); err != nil {
 		log.Fatal(err)
 	}
 
 	// check send tokens
-	if err := testSendTokens(mainClient, treasurerSigner, mainSigner, otherSigner); err != nil {
+	if err := testSendTokens(mainClient.Client, treasurerSigner, mainSigner, otherSigner); err != nil {
 		log.Fatal(err)
 	}
 
 	// check set account delegate
-	if err := testSetAccountDelegate(mainClient, mainSigner, otherSigner); err != nil {
+	if err := testSetAccountDelegate(mainClient.Client, mainSigner, otherSigner); err != nil {
 		log.Fatal(err)
 	}
 
 	// check collect faucet tx
-	if err := testCollectFaucet(mainClient, mainSigner, otherSigner); err != nil {
+	if err := testCollectFaucet(mainClient.Client, mainSigner, otherSigner); err != nil {
 		log.Fatal(err)
 	}
 }
