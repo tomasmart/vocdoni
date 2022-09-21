@@ -1696,7 +1696,7 @@ func (mainClient testClient) repeatCmdUntilStdoutContains(args []string, s strin
 			return stdout, nil
 		}
 		if err != nil {
-			log.Warn(err)
+			log.Debug(err)
 		}
 		mainClient.WaitUntilNextBlock()
 	}

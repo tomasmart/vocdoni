@@ -29,8 +29,8 @@ func (c *Client) WaitUntilBlock(block uint32) {
 		if cb >= block {
 			break
 		}
+		log.Debugf("current block: %d", cb)
 		time.Sleep(TimeBetweenBlocks)
-		log.Infof("remaining blocks: %d", block-cb)
 	}
 }
 
