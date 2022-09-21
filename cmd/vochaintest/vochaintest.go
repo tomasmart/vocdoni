@@ -195,6 +195,20 @@ func privKeyToSigner(key string) (*ethereum.SignKeys, error) {
 	return skey, nil
 }
 
+// newClient will open a connection to addr.
+// If it fails, it will retry 10 times (with 1s interval)
+// before giving up
+func newClient(addr string) (*client.Client, error) {
+	for tries := 10; tries > 0; tries-- {
+		c, err := client.New(addr)
+		if err == nil {
+			return c, nil
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return nil, fmt.Errorf("couldn't connect to gateway, tried 10 times")
+}
+
 func censusGenerate(host string, signer *ethereum.SignKeys, size int, filepath string, withWeight uint64) {
 	cl, err := client.New(host)
 	if err != nil {
@@ -225,17 +239,8 @@ func censusGenerate(host string, signer *ethereum.SignKeys, size int, filepath s
 }
 
 func censusImport(host string, signer *ethereum.SignKeys) {
-	var cl *client.Client
-	var err error
-
 	// Connect
-	for tries := 10; tries > 0; tries-- {
-		cl, err = client.New(host)
-		if err == nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
+	cl, err := newClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -341,14 +346,7 @@ func initAccounts(treasurer, oracle string, accountKeys []*ethereum.SignKeys, ho
 	}
 	log.Infof("connecting to main gateway %s", host)
 	// connecting to endpoint
-	var mainClient *client.Client
-	for tries := 10; tries > 0; tries-- {
-		mainClient, err = client.New(host)
-		if err == nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
+	mainClient, err := newClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -462,16 +460,9 @@ func mkTreeVoteTest(host string,
 
 	log.Infof("connecting to main gateway %s", host)
 	// Add the first connection, this will be the main connection
-	var mainClient *client.Client
 	var clients []*client.Client
 
-	for tries := 10; tries > 0; tries-- {
-		mainClient, err = client.New(host)
-		if err == nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
+	mainClient, err := newClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -678,16 +669,9 @@ func mkTreeAnonVoteTest(host string,
 
 	log.Infof("connecting to main gateway %s", host)
 	// Add the first connection, this will be the main connection
-	var mainClient *client.Client
 	var clients []*client.Client
 
-	for tries := 10; tries > 0; tries-- {
-		mainClient, err = client.New(host)
-		if err == nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
+	mainClient, err := newClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -958,16 +942,9 @@ func cspVoteTest(
 
 	log.Infof("connecting to main gateway %s", host)
 	// Add the first connection, this will be the main connection
-	var mainClient *client.Client
 	var clients []*client.Client
 
-	for tries := 10; tries > 0; tries-- {
-		mainClient, err = client.New(host)
-		if err == nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
+	mainClient, err := newClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1108,16 +1085,7 @@ func testTokenTransactions(
 	}
 
 	log.Infof("connecting to main gateway %s", host)
-	// add the first connection, this will be the main connection
-	var mainClient *client.Client
-
-	for tries := 10; tries > 0; tries-- {
-		mainClient, err = client.New(host)
-		if err == nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
+	mainClient, err := newClient(host)
 	if err != nil {
 		log.Fatal(err)
 	}
