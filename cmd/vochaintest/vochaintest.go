@@ -268,15 +268,6 @@ func censusImport(host string, signer *ethereum.SignKeys) {
 	log.Infof("Census created and published\nRoot: %x\nURI: %s", root, uri)
 }
 
-func waitUntilNextBlock(mainClient *client.Client) error {
-	h, err := mainClient.GetCurrentBlock()
-	if err != nil {
-		return fmt.Errorf("cannot get current height: %w", err)
-	}
-	mainClient.WaitUntilBlock(h + 1)
-	return nil
-}
-
 func ensureProcessCreated(mainClient *client.Client,
 	signer *ethereum.SignKeys,
 	entityID common.Address,
@@ -306,7 +297,7 @@ func ensureProcessCreated(mainClient *client.Client,
 			time.Sleep(time.Second * 8)
 			continue
 		}
-		waitUntilNextBlock(mainClient)
+		mainClient.WaitUntilNextBlock()
 		p, err := mainClient.GetProcessInfo(pid)
 		if err != nil {
 			log.Infof("ensureProcessCreated: process %x not yet available ... (%s)", pid, err)
@@ -322,7 +313,7 @@ func ensureProcessCreated(mainClient *client.Client,
 func ensureProcessEnded(mainClient *client.Client, signer *ethereum.SignKeys, processID types.ProcessID, retries int) error {
 	for i := 0; i <= retries; i++ {
 		_ = mainClient.EndProcess(signer, processID)
-		waitUntilNextBlock(mainClient)
+		mainClient.WaitUntilNextBlock()
 		p, err := mainClient.GetProcessInfo(processID)
 		if err != nil {
 			log.Warnf("ensureProcessEnded: cannot force end process: cannot get process %x info: %s", processID, err.Error())
@@ -375,7 +366,7 @@ func initAccounts(treasurer, oracle string, accountKeys []*ethereum.SignKeys, ho
 	log.Infof("minted 100000 tokens to oracle")
 
 	for _, k := range accountKeys {
-		waitUntilNextBlock(mainClient)
+		mainClient.WaitUntilNextBlock()
 		if err := ensureAccountExists(mainClient, k, retries); err != nil {
 			return fmt.Errorf("cannot check if account exists: %w", err)
 		}
@@ -402,7 +393,7 @@ func ensureAccountExists(mainClient *client.Client, account *ethereum.SignKeys, 
 				return fmt.Errorf("cannot create account %s: %w", account.Address(), err)
 			}
 		}
-		waitUntilNextBlock(mainClient)
+		mainClient.WaitUntilNextBlock()
 	}
 	return fmt.Errorf("cannot create account %s after %d retries", account.Address(), retries)
 }
@@ -429,7 +420,7 @@ func ensureAccountHasTokens(mainClient *client.Client,
 		// So, ignore errors, we only care that accountHasTokens in the end
 		_ = mainClient.MintTokens(treasurer, accountAddr, treasurerAccount.GetNonce(), 100000)
 
-		waitUntilNextBlock(mainClient)
+		mainClient.WaitUntilNextBlock()
 	}
 	return fmt.Errorf("tried to mint %d times, yet balance still not enough", retries)
 }

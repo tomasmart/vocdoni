@@ -34,6 +34,23 @@ func (c *Client) WaitUntilBlock(block uint32) {
 	}
 }
 
+func (c *Client) WaitUntilNBlocks(n uint32) {
+	for {
+		cb, err := c.GetCurrentBlock()
+		if err != nil {
+			log.Error(err)
+			time.Sleep(pollInterval)
+			continue
+		}
+		c.WaitUntilBlock(cb + n)
+		return
+	}
+}
+
+func (c *Client) WaitUntilNextBlock() {
+	c.WaitUntilNBlocks(1)
+}
+
 func CreateEthRandomKeysBatch(n int) []*ethereum.SignKeys {
 	s := make([]*ethereum.SignKeys, n)
 	for i := 0; i < n; i++ {
