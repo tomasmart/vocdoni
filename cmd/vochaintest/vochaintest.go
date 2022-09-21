@@ -494,7 +494,7 @@ func mkTreeVoteTest(host string,
 
 	for i := 0; i < parallelCons; i++ {
 		log.Infof("opening gateway connection to %s", gwList[i%len(gwList)])
-		cl, err := client.New(gwList[i%len(gwList)])
+		cl, err := newClient(gwList[i%len(gwList)])
 		if err != nil {
 			log.Warn(err)
 			continue
@@ -702,7 +702,7 @@ func mkTreeAnonVoteTest(host string,
 
 	for i := 0; i < parallelCons; i++ {
 		log.Infof("opening gateway connection to %s", gwList[i%len(gwList)])
-		cl, err := client.New(gwList[i%len(gwList)])
+		cl, err := newClient(gwList[i%len(gwList)])
 		if err != nil {
 			log.Warn(err)
 			continue
@@ -976,7 +976,7 @@ func cspVoteTest(
 
 	for i := 0; i < parallelCons; i++ {
 		log.Infof("opening gateway connection to %s", gwList[i%len(gwList)])
-		cl, err := client.New(gwList[i%len(gwList)])
+		cl, err := newClient(gwList[i%len(gwList)])
 		if err != nil {
 			log.Warn(err)
 			continue
@@ -987,7 +987,7 @@ func cspVoteTest(
 
 	for i := 0; i < parallelCons; i++ {
 		log.Infof("opening gateway connection to %s", gwList[i%len(gwList)])
-		cl, err := client.New(gwList[i%len(gwList)])
+		cl, err := newClient(gwList[i%len(gwList)])
 		if err != nil {
 			log.Warn(err)
 			continue
