@@ -1490,6 +1490,13 @@ func testCollectFaucet(mainClient *client.Client, from, to *ethereum.SignKeys) e
 func testVocli(url, treasurerPrivKey string) {
 	vocli.SetupLogPackage = false
 
+	log.Infof("connecting to main gateway %s", url)
+	c, err := newTestClient(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer c.Close()
+
 	parseImportOutput := func(stdout string) (address, keyPath string) {
 		a := strings.TrimSpace(addressRegexp.FindString(stdout))
 		a2 := strings.Split(a, " ")
@@ -1499,18 +1506,6 @@ func testVocli(url, treasurerPrivKey string) {
 		k2 := strings.Split(k, " ")
 		keyPath = k2[len(k2)-1]
 		return newAddr, keyPath
-	}
-	ensureSetAccountInfoMined := func(address string, stdArgs []string) (string, error) {
-		// 50% of the time the SetAccountInfoTx doesn't get mined even in 2, 3x the block period
-		// so keep polling until we finally confirm the account has been created
-		for i := 1; i < 20; i++ {
-			_, stout, _, err := executeCommand(vocli.RootCmd, append([]string{"account", "info", address}, stdArgs...), "", false)
-			if err == nil {
-				return stout, nil
-			}
-			time.Sleep(time.Second * 10)
-		}
-		return "", fmt.Errorf("cannot ensure account was mined after 20 attempts")
 	}
 	generateKeyAndReturnAddress := func(url string, stdArgs []string) (address, keyPath string, err error) {
 		_, stdout, _, err := executeCommand(vocli.RootCmd, append([]string{"keys", "new", fmt.Sprintf("-u=%s", url)}, stdArgs...), "", false)
@@ -1522,7 +1517,7 @@ func testVocli(url, treasurerPrivKey string) {
 		if err != nil {
 			return
 		}
-		out, err := ensureSetAccountInfoMined(address, stdArgs)
+		out, err := c.waitUntilAccountExists(address, stdArgs)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -1570,7 +1565,7 @@ func testVocli(url, treasurerPrivKey string) {
 		log.Fatalf("stdout should mention that alice's account was created on the chain, but instead: %s", stdout)
 	}
 
-	out, err := ensureSetAccountInfoMined(alice, stdArgs)
+	out, err := c.waitUntilAccountExists(alice, stdArgs)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1693,6 +1688,19 @@ func testVocli(url, treasurerPrivKey string) {
 		finalTxCosts := strings.Split(strings.TrimSpace(stdout), "\n")
 		log.Infof("new tx cost: %+v", finalTxCosts)
 	}()
+}
+
+func (mainClient testClient) waitUntilAccountExists(address string, stdArgs []string) (string, error) {
+	// 50% of the time the SetAccountInfoTx doesn't get mined even in 2, 3x the block period
+	// so keep polling until we finally confirm the account has been created
+	for i := 1; i < 20; i++ {
+		_, stout, _, err := executeCommand(vocli.RootCmd, append([]string{"account", "info", address}, stdArgs...), "", false)
+		if err == nil {
+			return stout, nil
+		}
+		mainClient.WaitUntilNextBlock()
+	}
+	return "", fmt.Errorf("account still doesn't exist, after 20 blocks")
 }
 
 func executeCommand(root *cobra.Command, args []string, input string, verbose bool) (*cobra.Command, string, string, error) {
