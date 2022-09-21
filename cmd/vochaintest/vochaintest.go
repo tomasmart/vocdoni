@@ -1607,11 +1607,9 @@ func testVocli(url, treasurerPrivKey string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		time.Sleep(time.Second * 10)
-
-		_, stdout, _, err = executeCommand(vocli.RootCmd, append([]string{"account", "info", newAccount}, stdArgs...), "", true)
+		_, err = c.waitUntilAccountInfoContains(newAccount, "balance:", stdArgs)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("mint failed: %s balance is still 0 (%v)", newAccount, err)
 		}
 	}()
 	func() {
@@ -1624,21 +1622,21 @@ func testVocli(url, treasurerPrivKey string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		time.Sleep(time.Second * 10)
+		// generateKeyAndReturnAddress only returns after the account was effectively mined.
 		if _, _, _, err = executeCommand(vocli.RootCmd, append([]string{"mint", aliceKeyPath, a, "1000"}, stdArgs...), "", true); err != nil {
 			log.Fatal(err)
 		}
-		time.Sleep(time.Second * 10)
-
+		_, err = c.waitUntilAccountInfoContains(a, "balance:", stdArgs)
+		if err != nil {
+			log.Fatal(err)
+		}
 		_, _, _, err = executeCommand(vocli.RootCmd, append([]string{"send", aKeyPath, b, "98"}, stdArgs...), "", true)
 		if err != nil {
 			log.Fatal(err)
 		}
-		time.Sleep(time.Second * 10)
-
-		_, stdout, _, err = executeCommand(vocli.RootCmd, append([]string{"account", "info", b}, stdArgs...), "", true)
+		_, err = c.waitUntilAccountInfoContains(b, "balance:98", stdArgs)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("send a -> b failed, balance still not 98 (%v)", err)
 		}
 	}()
 	func() {
@@ -1655,7 +1653,10 @@ func testVocli(url, treasurerPrivKey string) {
 		if _, _, _, err := executeCommand(vocli.RootCmd, append([]string{"mint", aliceKeyPath, a, "1000"}, stdArgs...), "", true); err != nil {
 			log.Fatal(err)
 		}
-		time.Sleep(time.Second * 10)
+		_, err = c.waitUntilAccountInfoContains(a, "balance:", stdArgs)
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		_, stdout, _, err = executeCommand(vocli.RootCmd, append([]string{"genfaucet", aKeyPath, b, "800"}, stdArgs...), "", true) // leave plenty of spare coins for differing txCosts
 		if err != nil {
@@ -1678,10 +1679,7 @@ func testVocli(url, treasurerPrivKey string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		// wait a bit for the tx to be mined and the node to increment the
-		// account's nonce
-		time.Sleep(time.Second * 20)
-		_, stdout, _, err = executeCommand(vocli.RootCmd, append([]string{"txcost", "get"}, stdArgs...), "", true)
+		stdout, err = c.repeatCmdUntilStdoutContains(append([]string{"txcost", "get"}, stdArgs...), "RegisterKey 50")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -1690,17 +1688,33 @@ func testVocli(url, treasurerPrivKey string) {
 	}()
 }
 
-func (mainClient testClient) waitUntilAccountExists(address string, stdArgs []string) (string, error) {
-	// 50% of the time the SetAccountInfoTx doesn't get mined even in 2, 3x the block period
-	// so keep polling until we finally confirm the account has been created
-	for i := 1; i < 20; i++ {
-		_, stout, _, err := executeCommand(vocli.RootCmd, append([]string{"account", "info", address}, stdArgs...), "", false)
-		if err == nil {
-			return stout, nil
+func (mainClient testClient) repeatCmdUntilStdoutContains(args []string, s string) (stdout string, err error) {
+	retries := 10
+	for i := 0; i < retries; i++ {
+		_, stdout, _, err := executeCommand(vocli.RootCmd, args, "", true)
+		if err == nil && strings.Contains(stdout, s) {
+			return stdout, nil
+		}
+		if err != nil {
+			log.Warn(err)
 		}
 		mainClient.WaitUntilNextBlock()
 	}
-	return "", fmt.Errorf("account still doesn't exist, after 20 blocks")
+	return "", fmt.Errorf("gave up waiting after %d blocks", retries)
+}
+func (mainClient testClient) waitUntilAccountInfoContains(address string, s string, stdArgs []string) (stdout string, err error) {
+	return mainClient.repeatCmdUntilStdoutContains(append([]string{"account", "info", address}, stdArgs...), s)
+}
+
+// waitUntilAccountExists executes "vocli account info <address>" until success or timeout
+// often, the SetAccountInfoTx doesn't get mined even in 2, 3x the block period
+// so keep polling until we finally confirm the account has been created
+func (mainClient testClient) waitUntilAccountExists(address string, stdArgs []string) (stdout string, err error) {
+	stdout, err = mainClient.waitUntilAccountInfoContains(address, "infoURI:", stdArgs)
+	if err != nil {
+		return "", fmt.Errorf("account %s still doesn't exist: %v", address, err)
+	}
+	return stdout, nil
 }
 
 func executeCommand(root *cobra.Command, args []string, input string, verbose bool) (*cobra.Command, string, string, error) {
