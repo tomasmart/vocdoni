@@ -355,7 +355,12 @@ func (mainClient testClient) ensureProcessCreated(
 
 func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, processID types.ProcessID, retries int) error {
 	for i := 0; i <= retries; i++ {
-		_ = mainClient.EndProcess(signer, processID)
+		err := mainClient.EndProcess(signer, processID)
+		if err != nil {
+			time.Sleep(time.Second * 8)
+			continue
+		}
+
 		mainClient.WaitUntilNextBlock()
 		p, err := mainClient.GetProcessInfo(processID)
 		if err != nil {
