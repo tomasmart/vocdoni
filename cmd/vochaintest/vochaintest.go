@@ -361,7 +361,7 @@ func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, proce
 			log.Warnf("ensureProcessEnded: cannot force end process: cannot get process %x info: %s", processID, err.Error())
 		}
 		log.Infof("ensureProcessEnded: got process %x info %+v", processID, p)
-		if p != nil && p.Status == int32(models.ProcessStatus_ENDED) || p.Status == int32(models.ProcessStatus_RESULTS) {
+		if p != nil && (p.Status == int32(models.ProcessStatus_ENDED) || p.Status == int32(models.ProcessStatus_RESULTS)) {
 			return nil
 		}
 		if i == retries { // that was the last chance, break and fail immediately
