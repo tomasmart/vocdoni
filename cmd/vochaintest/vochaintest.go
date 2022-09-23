@@ -343,6 +343,7 @@ func (mainClient testClient) ensureProcessCreated(
 		p, err := mainClient.GetProcessInfo(pid)
 		if err != nil {
 			log.Infof("ensureProcessCreated: process %x not yet available ... (%s)", pid, err)
+			continue
 		}
 		if p != nil {
 			log.Infof("ensureProcessCreated: got process %x info %+v", pid, p)
@@ -359,13 +360,11 @@ func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, proce
 		p, err := mainClient.GetProcessInfo(processID)
 		if err != nil {
 			log.Warnf("ensureProcessEnded: cannot force end process: cannot get process %x info: %s", processID, err.Error())
+			continue
 		}
 		log.Infof("ensureProcessEnded: got process %x info %+v", processID, p)
 		if p != nil && (p.Status == int32(models.ProcessStatus_ENDED) || p.Status == int32(models.ProcessStatus_RESULTS)) {
 			return nil
-		}
-		if i == retries { // that was the last chance, break and fail immediately
-			break
 		}
 	}
 	return fmt.Errorf("ensureProcessEnded: process may not be ended after %d blocks", retries)
