@@ -541,7 +541,7 @@ func mkTreeVoteTest(host string,
 		0,
 		procDuration,
 		uint64(electionSize),
-		5,
+		retries,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -670,7 +670,7 @@ func mkTreeVoteTest(host string,
 	}
 
 	log.Infof("ending process in order to fetch the results")
-	if err := mainClient.ensureProcessEnded(entityKey, pid, 5); err != nil {
+	if err := mainClient.ensureProcessEnded(entityKey, pid, retries); err != nil {
 		log.Fatal(err)
 	}
 	maxVotingTime := time.Duration(0)
@@ -747,7 +747,7 @@ func mkTreeAnonVoteTest(host string,
 		7,
 		procDuration,
 		uint64(electionSize),
-		5,
+		retries,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -955,7 +955,7 @@ func mkTreeAnonVoteTest(host string,
 
 	log.Infof("ending process in order to fetch the results")
 	// also checks oracle permissions
-	if err := mainClient.ensureProcessEnded(entityKey, pid, 5); err != nil {
+	if err := mainClient.ensureProcessEnded(entityKey, pid, retries); err != nil {
 		log.Fatal(err)
 	}
 	maxVotingTime := time.Duration(0)
@@ -1020,7 +1020,7 @@ func cspVoteTest(
 		0,
 		procDuration,
 		uint64(electionSize),
-		5,
+		retries,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -1099,7 +1099,7 @@ func cspVoteTest(
 	wg.Wait()
 
 	log.Infof("ending process in order to fetch the results")
-	if err := mainClient.ensureProcessEnded(entityKey, pid, 5); err != nil {
+	if err := mainClient.ensureProcessEnded(entityKey, pid, retries); err != nil {
 		log.Fatal(err)
 	}
 	maxVotingTime := time.Duration(0)
