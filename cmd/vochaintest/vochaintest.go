@@ -359,14 +359,6 @@ func (mainClient testClient) ensureProcessCreated(
 
 func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, processID types.ProcessID, retries int) error {
 	for i := 0; i <= retries; i++ {
-		txhash, err := mainClient.EndProcess(signer, processID)
-		if err != nil {
-			time.Sleep(client.TimeBetweenBlocks)
-			continue
-		}
-
-		_ = mainClient.WaitUntilTxMined(txhash)
-
 		p, err := mainClient.GetProcessInfo(processID)
 		if err != nil {
 			log.Warnf("ensureProcessEnded: cannot force end process: cannot get process %x info: %s", processID, err.Error())
@@ -376,6 +368,14 @@ func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, proce
 		if p != nil && (p.Status == int32(models.ProcessStatus_ENDED) || p.Status == int32(models.ProcessStatus_RESULTS)) {
 			return nil
 		}
+
+		txhash, err := mainClient.EndProcess(signer, processID)
+		if err != nil {
+			time.Sleep(client.TimeBetweenBlocks)
+			continue
+		}
+
+		_ = mainClient.WaitUntilTxMined(txhash)
 	}
 	return fmt.Errorf("ensureProcessEnded: process could not be ended after %d retries", retries)
 }
