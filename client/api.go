@@ -1497,6 +1497,19 @@ func (c *Client) SubmitRawTx(signer *ethereum.SignKeys, stx *models.SignedTx) (*
 	return c.Request(req, nil)
 }
 
+// GetTxByHash looks up a transaction given its hash
+func (c *Client) GetTxByHash(txhash types.HexBytes) (*indexertypes.TxPackage, error) {
+	req := api.APIrequest{Method: "getTxByHash", Hash: txhash}
+	resp, err := c.Request(req, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Ok {
+		return nil, fmt.Errorf("could not get tx: %s", resp.Message)
+	}
+	return resp.Tx, nil
+}
+
 // MintTokens sends a mint tokens transaction
 // and returns the txHash of the transaction, or nil and the error
 func (c *Client) MintTokens(

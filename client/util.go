@@ -51,6 +51,25 @@ func (c *Client) WaitUntilNextBlock() {
 	c.WaitUntilNBlocks(1)
 }
 
+func (c *Client) WaitUntilTxMined(txhash types.HexBytes) error {
+	log.Infof("waiting for tx %x (checking every %s)", txhash, pollInterval)
+	timeout := time.After(waitTimeout)
+	poll := time.NewTicker(pollInterval)
+	defer poll.Stop()
+	for {
+		select {
+		case <-poll.C:
+			tx, err := c.GetTxByHash(txhash)
+			if err == nil {
+				log.Infof("found tx %x in block %d", txhash, tx.BlockHeight)
+				return nil
+			}
+		case <-timeout:
+			return fmt.Errorf("WaitUntilTxMined(%x) timed out after %s", txhash, waitTimeout)
+		}
+	}
+}
+
 func CreateEthRandomKeysBatch(n int) []*ethereum.SignKeys {
 	s := make([]*ethereum.SignKeys, n)
 	for i := 0; i < n; i++ {
