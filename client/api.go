@@ -231,26 +231,23 @@ func (c *Client) GetRollingCensusVoterWeight(pid []byte, address common.Address)
 	return resp.Weight.ToInt(), nil
 }
 
-func (c *Client) TestResults(pid []byte, totalVotes int, withWeight uint64) ([][]string, error) {
+func (c *Client) TestResults(pid []byte, totalVotes int, withWeight uint64) (results [][]string, err error) {
 	log.Infof("waiting for results...")
-	var err error
-	var results [][]string
-	var block uint32
 	var final bool
 	for {
-		block, err = c.GetCurrentBlock()
-		if err != nil {
-			return nil, err
-		}
-		c.WaitUntilBlock(block + 1)
+		c.WaitUntilNextBlock()
 		results, _, final, err = c.GetResults(pid)
 		if err != nil {
+			if strings.Contains(err.Error(), "database is locked") {
+				// temp problem, just try again
+				continue
+			}
 			return nil, err
 		}
 		if final {
 			break
 		}
-		log.Infof("no results yet at block %d", block+2)
+		log.Infof("no results yet")
 	}
 	total := fmt.Sprintf("%d", uint64(totalVotes)*withWeight)
 	if results[0][1] != total ||
