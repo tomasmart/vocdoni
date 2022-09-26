@@ -242,12 +242,12 @@ func createAccount(key *ethkeystore.Key, url, infoUri, faucetPkg string) error {
 		if err != nil {
 			return err
 		}
-		err = client.CreateOrSetAccount(signer, signer.Address(), infoUri, nonce, faucetPkg)
+		_, err = client.CreateOrSetAccount(signer, signer.Address(), infoUri, nonce, faucetPkg)
 		if err != nil {
 			return err
 		}
 	} else {
-		err = client.CreateOrSetAccount(signer, signer.Address(), infoUri, nonce, nil)
+		_, err = client.CreateOrSetAccount(signer, signer.Address(), infoUri, nonce, nil)
 		if err != nil {
 			return err
 		}

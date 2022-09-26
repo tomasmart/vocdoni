@@ -39,6 +39,7 @@ var setProcessCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("could not decode hexstring %s into bytes", args[1])
 		}
-		return c.SetProcessStatus(key, pid, args[2])
+		_, err = c.SetProcessStatus(key, pid, args[2])
+		return err
 	},
 }

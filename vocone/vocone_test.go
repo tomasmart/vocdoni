@@ -48,7 +48,7 @@ func testCSPvote(oracle *ethereum.SignKeys, url string) error {
 	censusOrigin := models.CensusOrigin_OFF_CHAIN_CA
 	duration := 100
 	censusSize := 10
-	startBlock, processID, err := cli.CreateProcess(
+	startBlock, processID, _, err := cli.CreateProcess(
 		oracle,
 		entityID,
 		censusRoot,
@@ -90,7 +90,7 @@ func testCSPvote(oracle *ethereum.SignKeys, url string) error {
 	}
 	fmt.Printf("voting took %s\n", elapsedTime)
 
-	if err := cli.EndProcess(oracle, processID); err != nil {
+	if _, err := cli.EndProcess(oracle, processID); err != nil {
 		return err
 	}
 	if _, err := cli.TestResults(processID, len(voterKeys), 1); err != nil {

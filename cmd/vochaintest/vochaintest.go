@@ -299,7 +299,7 @@ func (mainClient testClient) ensureTxCostEquals(signer *ethereum.SignKeys, txTyp
 
 		// SetTransactionCost can return OK and then the tx be rejected anyway later.
 		// So, ignore errors, we only care about GetTransactionCost in the next loop
-		_ = mainClient.SetTransactionCost(
+		_, err = mainClient.SetTransactionCost(
 			signer,
 			txType,
 			cost,
@@ -324,7 +324,7 @@ func (mainClient testClient) ensureProcessCreated(
 	retries int,
 ) (uint32, []byte, error) {
 	for i := 0; i < retries; i++ {
-		start, pid, err := mainClient.CreateProcess(
+		start, pid, _, err := mainClient.CreateProcess(
 			signer,
 			entityID.Bytes(),
 			censusRoot,
@@ -355,7 +355,7 @@ func (mainClient testClient) ensureProcessCreated(
 
 func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, processID types.ProcessID, retries int) error {
 	for i := 0; i <= retries; i++ {
-		err := mainClient.EndProcess(signer, processID)
+		_, err := mainClient.EndProcess(signer, processID)
 		if err != nil {
 			time.Sleep(time.Second * 8)
 			continue
@@ -429,7 +429,7 @@ func (mainClient testClient) ensureAccountInfoEquals(account *ethereum.SignKeys,
 		// else, set it
 		// CreateOrSetAccount can return OK and then the tx be rejected anyway later.
 		// So, ignore errors, we only care about GetAccount in the next loop
-		_ = mainClient.CreateOrSetAccount(account, common.Address{}, infoURI, acct.Nonce, nil)
+		_, _ = mainClient.CreateOrSetAccount(account, common.Address{}, infoURI, acct.Nonce, nil)
 
 		mainClient.WaitUntilNextBlock()
 	}
@@ -443,7 +443,7 @@ func (mainClient testClient) ensureAccountExists(account *ethereum.SignKeys, ret
 			return nil
 		}
 
-		if err := mainClient.CreateOrSetAccount(account, common.Address{}, "ipfs://", 0, faucetPkg); err != nil {
+		if _, err := mainClient.CreateOrSetAccount(account, common.Address{}, "ipfs://", 0, faucetPkg); err != nil {
 			if strings.Contains(err.Error(), "tx already exists in cache") {
 				// don't worry then, someone else created it in a race, nevermind, job done.
 			} else {
@@ -475,7 +475,7 @@ func (mainClient testClient) ensureAccountHasTokens(
 
 		// MintTokens can return OK and then the tx be rejected anyway later.
 		// So, ignore errors, we only care that accountHasTokens in the end
-		_ = mainClient.MintTokens(treasurer, accountAddr, treasurerAccount.GetNonce(), amount)
+		_, _ = mainClient.MintTokens(treasurer, accountAddr, treasurerAccount.GetNonce(), amount)
 
 		mainClient.WaitUntilNextBlock()
 	}
@@ -1292,7 +1292,7 @@ func (mainClient testClient) testSendTokens(treasurerSigner, signer, signer2 *et
 	}
 	log.Infof("fetched from account %s with nonce %d and balance %d", signer.Address(), acc.Nonce, acc.Balance)
 	// try send tokens
-	if err := mainClient.SendTokens(signer,
+	if _, err := mainClient.SendTokens(signer,
 		signer2.Address(),
 		acc.Nonce,
 		100); err != nil {
@@ -1352,7 +1352,7 @@ func (mainClient testClient) testSetAccountDelegate(signer, signer2 *ethereum.Si
 	}
 	log.Infof("fetched from account %s with nonce %d and delegates %v", signer.Address(), acc.Nonce, acc.DelegateAddrs)
 	// add delegate
-	if err := mainClient.SetAccountDelegate(signer,
+	if _, err := mainClient.SetAccountDelegate(signer,
 		signer2.Address(),
 		true,
 		acc.Nonce); err != nil {
@@ -1386,7 +1386,7 @@ func (mainClient testClient) testSetAccountDelegate(signer, signer2 *ethereum.Si
 	if acc == nil {
 		return vochain.ErrAccountNotExist
 	}
-	if err := mainClient.SetAccountDelegate(signer,
+	if _, err := mainClient.SetAccountDelegate(signer,
 		signer2.Address(),
 		false,
 		acc.Nonce); err != nil {
@@ -1445,7 +1445,7 @@ func (mainClient testClient) testCollectFaucet(from, to *ethereum.SignKeys) erro
 	}
 
 	// collect faucet tx
-	if err := mainClient.CollectFaucet(to, accTo.Nonce, faucetPkg); err != nil {
+	if _, err := mainClient.CollectFaucet(to, accTo.Nonce, faucetPkg); err != nil {
 		return fmt.Errorf("error on collect faucet tx: %v", err)
 	}
 

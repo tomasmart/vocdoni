@@ -236,7 +236,7 @@ func createCensusAndProcess(b *testing.B, cl *client.Client, dvoteServer testcom
 	log.Infof("created census - published at %s", censusURI)
 
 	log.Info("creating a new process")
-	start, processID, err := cl.CreateProcess(
+	start, processID, _, err := cl.CreateProcess(
 		dvoteServer.Signer,
 		entityID,
 		censusRoot,

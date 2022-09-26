@@ -44,7 +44,7 @@ func BenchmarkVochainCSP(b *testing.B) {
 	entityID := dvoteServer.Signer.Address().Bytes()
 
 	log.Info("creating a new process")
-	start, processID, err := cl.CreateProcess(
+	start, processID, _, err := cl.CreateProcess(
 		dvoteServer.Signer,
 		entityID,
 		cspKey.PublicKey(),

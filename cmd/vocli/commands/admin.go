@@ -46,6 +46,7 @@ var setOracleCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("invalid operation, cannot parse bool")
 		}
-		return c.SetOracle(key, oracleAddr, t.Nonce, op)
+		_, err = c.SetOracle(key, oracleAddr, t.Nonce, op)
+		return err
 	},
 }

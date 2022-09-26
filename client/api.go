@@ -1065,7 +1065,11 @@ func (c *Client) TestSendAnonVotes(
 	return votingElapsedTime, nil
 }
 
-func (c *Client) CreateProcess(account *ethereum.SignKeys,
+// CreateProcess creates a process, returning the resulting startBlock
+// and the processID assigned
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) CreateProcess(
+	account *ethereum.SignKeys,
 	entityID, censusRoot []byte,
 	censusURI string,
 	envelopeType *models.EnvelopeType,
@@ -1073,13 +1077,12 @@ func (c *Client) CreateProcess(account *ethereum.SignKeys,
 	censusOrigin models.CensusOrigin,
 	startBlockIncrement int,
 	duration int,
-	maxCensusSize uint64) (uint32, []byte, error) {
-
-	startBlock := uint32(0)
+	maxCensusSize uint64,
+) (startBlock uint32, processID []byte, txHash types.HexBytes, err error) {
 	if startBlockIncrement > 0 {
 		current, err := c.GetCurrentBlock()
 		if err != nil {
-			return 0, nil, err
+			return 0, nil, nil, err
 		}
 		startBlock = current + uint32(startBlockIncrement)
 	}
@@ -1106,10 +1109,10 @@ func (c *Client) CreateProcess(account *ethereum.SignKeys,
 	// get oracle account
 	acc, err := c.GetAccount(account.Address())
 	if err != nil {
-		return 0, nil, fmt.Errorf("cannot get account")
+		return 0, nil, nil, fmt.Errorf("cannot get account")
 	}
 	if acc == nil {
-		return 0, nil, vochain.ErrAccountNotExist
+		return 0, nil, nil, vochain.ErrAccountNotExist
 	}
 	p := &models.NewProcessTx{
 		Txtype:  models.TxType_NEW_PROCESS,
@@ -1119,59 +1122,64 @@ func (c *Client) CreateProcess(account *ethereum.SignKeys,
 	stx := &models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_NewProcess{NewProcess: p}})
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	chainID, err := c.GetChainID()
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	if stx.Signature, err = account.SignVocdoniTx(stx.Tx, chainID); err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	if req.Payload, err = proto.Marshal(stx); err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 
 	resp, err := c.Request(req, nil)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	if !resp.Ok {
-		return 0, nil, fmt.Errorf("%s failed: %s", req.Method, resp.Message)
+		return 0, nil, nil, fmt.Errorf("%s failed: %s", req.Method, resp.Message)
 	}
-	processID, err := hex.DecodeString(resp.Payload)
+	processID, err = hex.DecodeString(resp.Payload)
 	if err != nil {
-		return 0, nil, fmt.Errorf("cannot decode process ID: %x", resp.Payload)
+		return 0, nil, nil, fmt.Errorf("cannot decode process ID: %x", resp.Payload)
 	}
 	if startBlockIncrement == 0 {
 		for i := 0; i < 10; i++ {
 			time.Sleep(2 * time.Second)
 			p, err := c.GetProcessInfo(processID)
 			if err == nil && p != nil {
-				return p.StartBlock, processID, nil
+				return p.StartBlock, processID, resp.Hash, nil
 			}
 		}
-		return 0, nil, fmt.Errorf("process was not created")
+		return 0, nil, nil, fmt.Errorf("process was not created")
 	}
-	return startBlock, processID, nil
+	return startBlock, processID, resp.Hash, nil
 }
 
-func (c *Client) SetProcessStatus(oracle *ethereum.SignKeys, pid []byte, status string) error {
+// SetProcessStatus changes the status of a process using the oracle account
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) SetProcessStatus(
+	oracle *ethereum.SignKeys,
+	pid []byte,
+	status string,
+) (txHash types.HexBytes, err error) {
 	s, ok := models.ProcessStatus_value[status]
 	if !ok {
-		return fmt.Errorf("invalid process status specified - refer to vochain.pb.go:ProcessStatus_name for valid statuses")
+		return nil, fmt.Errorf("invalid process status specified - refer to vochain.pb.go:ProcessStatus_name for valid statuses")
 	}
 	statusInt := models.ProcessStatus(s)
 	var req api.APIrequest
-	var err error
 	req.Method = "submitRawTx"
 	// get oracle account
 	acc, err := c.GetAccount(oracle.Address())
 	if err != nil {
-		return fmt.Errorf("cannot get account")
+		return nil, fmt.Errorf("cannot get account")
 	}
 	if acc == nil {
-		return vochain.ErrAccountNotExist
+		return nil, vochain.ErrAccountNotExist
 	}
 	p := &models.SetProcessTx{
 		Txtype:    models.TxType_SET_PROCESS_STATUS,
@@ -1182,30 +1190,35 @@ func (c *Client) SetProcessStatus(oracle *ethereum.SignKeys, pid []byte, status 
 	stx := &models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_SetProcess{SetProcess: p}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	chainID, err := c.GetChainID()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if stx.Signature, err = oracle.SignVocdoniTx(stx.Tx, chainID); err != nil {
-		return err
+		return nil, err
 	}
 	if req.Payload, err = proto.Marshal(stx); err != nil {
-		return err
+		return nil, err
 	}
 
 	resp, err := c.Request(req, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !resp.Ok {
-		return fmt.Errorf("%s failed: %s", req.Method, resp.Message)
+		return nil, fmt.Errorf("%s failed: %s", req.Method, resp.Message)
 	}
-	return nil
+	return resp.Hash, nil
 }
 
-func (c *Client) EndProcess(oracle *ethereum.SignKeys, pid []byte) error {
+// EndProcess ends a process identified by pid, using the oracle account
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) EndProcess(
+	oracle *ethereum.SignKeys,
+	pid []byte,
+) (txHash types.HexBytes, err error) {
 	return c.SetProcessStatus(oracle, pid, "ENDED")
 }
 
@@ -1374,9 +1387,13 @@ func (c *Client) GetTransactionCost(txType models.TxType) (uint64, error) {
 }
 
 // SetTransactionCost sets the transaction cost of a given transaction
-func (c *Client) SetTransactionCost(signer *ethereum.SignKeys, txType models.TxType, cost uint64, nonce uint32) error {
-	var err error
-
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) SetTransactionCost(
+	signer *ethereum.SignKeys,
+	txType models.TxType,
+	cost uint64,
+	nonce uint32,
+) (txHash types.HexBytes, err error) {
 	tx := &models.SetTransactionCostsTx{
 		Txtype: txType,
 		Nonce:  nonce,
@@ -1385,22 +1402,28 @@ func (c *Client) SetTransactionCost(signer *ethereum.SignKeys, txType models.TxT
 	stx := models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_SetTransactionCosts{SetTransactionCosts: tx}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.SubmitRawTx(signer, &stx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !resp.Ok {
-		return fmt.Errorf("submitRawTx failed: %s", resp.Message)
+		return nil, fmt.Errorf("submitRawTx failed: %s", resp.Message)
 	}
-	return nil
+	return resp.Hash, nil
 }
 
 // CreateOrSetAccount creates or sets the infoURI of a Vochain account
-func (c *Client) CreateOrSetAccount(signer *ethereum.SignKeys, to common.Address, infoURI string, nonce uint32, faucetPkg *models.FaucetPackage) error {
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) CreateOrSetAccount(
+	signer *ethereum.SignKeys,
+	to common.Address,
+	infoURI string,
+	nonce uint32,
+	faucetPkg *models.FaucetPackage,
+) (txHash types.HexBytes, err error) {
 	var req api.APIrequest
-	var err error
 	req.Method = "submitRawTx"
 
 	tx := &models.SetAccountInfoTx{
@@ -1414,16 +1437,16 @@ func (c *Client) CreateOrSetAccount(signer *ethereum.SignKeys, to common.Address
 	stx := models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_SetAccountInfo{SetAccountInfo: tx}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.SubmitRawTx(signer, &stx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !resp.Ok {
-		return fmt.Errorf("submitRawTx failed: %s", resp.Message)
+		return nil, fmt.Errorf("submitRawTx failed: %s", resp.Message)
 	}
-	return nil
+	return resp.Hash, nil
 }
 
 // GetAccount returns information of a given account
@@ -1478,9 +1501,14 @@ func (c *Client) SubmitRawTx(signer *ethereum.SignKeys, stx *models.SignedTx) (*
 }
 
 // MintTokens sends a mint tokens transaction
-func (c *Client) MintTokens(treasurer *ethereum.SignKeys, accountAddr common.Address, treasurerNonce uint32, amount uint64) error {
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) MintTokens(
+	treasurer *ethereum.SignKeys,
+	accountAddr common.Address,
+	treasurerNonce uint32,
+	amount uint64,
+) (txHash types.HexBytes, err error) {
 	var req api.APIrequest
-	var err error
 	req.Method = "submitRawTx"
 
 	tx := &models.MintTokensTx{
@@ -1493,22 +1521,27 @@ func (c *Client) MintTokens(treasurer *ethereum.SignKeys, accountAddr common.Add
 	stx := models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_MintTokens{MintTokens: tx}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.SubmitRawTx(treasurer, &stx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !resp.Ok {
-		return fmt.Errorf("submitRawTx failed: %s", resp.Message)
+		return nil, fmt.Errorf("submitRawTx failed: %s", resp.Message)
 	}
-	return nil
+	return resp.Hash, nil
 }
 
 // SendTokens sends a send tokens transaction
-func (c *Client) SendTokens(signer *ethereum.SignKeys, accountAddr common.Address, nonce uint32, amount uint64) error {
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) SendTokens(
+	signer *ethereum.SignKeys,
+	accountAddr common.Address,
+	nonce uint32,
+	amount uint64,
+) (txHash types.HexBytes, err error) {
 	var req api.APIrequest
-	var err error
 	req.Method = "submitRawTx"
 
 	tx := &models.SendTokensTx{
@@ -1522,22 +1555,27 @@ func (c *Client) SendTokens(signer *ethereum.SignKeys, accountAddr common.Addres
 	stx := models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_SendTokens{SendTokens: tx}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.SubmitRawTx(signer, &stx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !resp.Ok {
-		return fmt.Errorf("submitRawTx failed: %s", resp.Message)
+		return nil, fmt.Errorf("submitRawTx failed: %s", resp.Message)
 	}
-	return nil
+	return resp.Hash, nil
 }
 
-// SetDelegate sends a set delegate transaction, if op == true adds a delegate, deletes a delegate otherwise
-func (c *Client) SetAccountDelegate(signer *ethereum.SignKeys, delegate common.Address, op bool, nonce uint32) error {
+// SetAccountDelegate sends a set delegate transaction, if op == true adds a delegate, deletes a delegate otherwise
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) SetAccountDelegate(
+	signer *ethereum.SignKeys,
+	delegate common.Address,
+	op bool,
+	nonce uint32,
+) (txHash types.HexBytes, err error) {
 	var req api.APIrequest
-	var err error
 	req.Method = "submitRawTx"
 
 	tx := &models.SetAccountDelegateTx{
@@ -1552,22 +1590,26 @@ func (c *Client) SetAccountDelegate(signer *ethereum.SignKeys, delegate common.A
 	stx := models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_SetAccountDelegateTx{SetAccountDelegateTx: tx}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.SubmitRawTx(signer, &stx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !resp.Ok {
-		return fmt.Errorf("submitRawTx failed: %s", resp.Message)
+		return nil, fmt.Errorf("submitRawTx failed: %s", resp.Message)
 	}
-	return nil
+	return resp.Hash, nil
 }
 
 // CollectFaucet sends a collect faucet transaction
-func (c *Client) CollectFaucet(signer *ethereum.SignKeys, nonce uint32, faucetPkg *models.FaucetPackage) error {
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) CollectFaucet(
+	signer *ethereum.SignKeys,
+	nonce uint32,
+	faucetPkg *models.FaucetPackage,
+) (txHash types.HexBytes, err error) {
 	var req api.APIrequest
-	var err error
 	req.Method = "submitRawTx"
 
 	tx := &models.CollectFaucetTx{
@@ -1579,22 +1621,27 @@ func (c *Client) CollectFaucet(signer *ethereum.SignKeys, nonce uint32, faucetPk
 	stx := models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_CollectFaucet{CollectFaucet: tx}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.SubmitRawTx(signer, &stx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !resp.Ok {
-		return fmt.Errorf("submitRawTx failed: %s", resp.Message)
+		return nil, fmt.Errorf("submitRawTx failed: %s", resp.Message)
 	}
-	return nil
+	return resp.Hash, nil
 }
 
 // SetOracle sends an Add/Remove Oracle transaction, if op == false -> remove, else add
-func (c *Client) SetOracle(treasurer *ethereum.SignKeys, oracleAddress common.Address, treasurerNonce uint32, op bool) error {
+// and returns the txHash of the transaction, or nil and the error
+func (c *Client) SetOracle(
+	treasurer *ethereum.SignKeys,
+	oracleAddress common.Address,
+	treasurerNonce uint32,
+	op bool,
+) (txHash types.HexBytes, err error) {
 	var req api.APIrequest
-	var err error
 	req.Method = "submitRawTx"
 
 	tx := &models.AdminTx{
@@ -1610,14 +1657,14 @@ func (c *Client) SetOracle(treasurer *ethereum.SignKeys, oracleAddress common.Ad
 	stx := models.SignedTx{}
 	stx.Tx, err = proto.Marshal(&models.Tx{Payload: &models.Tx_Admin{Admin: tx}})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.SubmitRawTx(treasurer, &stx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !resp.Ok {
-		return fmt.Errorf("submitRawTx failed: %s", resp.Message)
+		return nil, fmt.Errorf("submitRawTx failed: %s", resp.Message)
 	}
-	return nil
+	return resp.Hash, nil
 }
