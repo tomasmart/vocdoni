@@ -1567,7 +1567,7 @@ func testVocli(url, treasurerPrivKey string) {
 	log.Infof("account %s fetched: %s", alice, out)
 
 	log.Info("vocli account mint alice (this lets one reuse node states across test runs, because subsequent SetAccountInfoTxs are not free")
-	_, _, _, err = executeCommand(vocli.RootCmd, append([]string{"mint", aliceKeyPath, alice, "1000"}, stdArgs...), "", true)
+	err = c.vocliEnsureAccountHasBalance(aliceKeyPath, alice, "1000", stdArgs)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1598,13 +1598,9 @@ func testVocli(url, treasurerPrivKey string) {
 		if newAccount, _, err = generateKeyAndReturnAddress(url, stdArgs); err != nil {
 			log.Fatal(err)
 		}
-		_, _, _, err = executeCommand(vocli.RootCmd, append([]string{"mint", aliceKeyPath, newAccount, "100"}, stdArgs...), "", true)
+		err = c.vocliEnsureAccountHasBalance(aliceKeyPath, newAccount, "100", stdArgs)
 		if err != nil {
 			log.Fatal(err)
-		}
-		_, err = c.waitUntilAccountInfoContains(newAccount, "balance:", stdArgs)
-		if err != nil {
-			log.Fatalf("mint failed: %s balance is still 0 (%v)", newAccount, err)
 		}
 	}()
 	func() {
@@ -1618,10 +1614,7 @@ func testVocli(url, treasurerPrivKey string) {
 			log.Fatal(err)
 		}
 		// generateKeyAndReturnAddress only returns after the account was effectively mined.
-		if _, _, _, err = executeCommand(vocli.RootCmd, append([]string{"mint", aliceKeyPath, a, "1000"}, stdArgs...), "", true); err != nil {
-			log.Fatal(err)
-		}
-		_, err = c.waitUntilAccountInfoContains(a, "balance:", stdArgs)
+		err = c.vocliEnsureAccountHasBalance(aliceKeyPath, a, "1000", stdArgs)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -1644,11 +1637,7 @@ func testVocli(url, treasurerPrivKey string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		if _, _, _, err := executeCommand(vocli.RootCmd, append([]string{"mint", aliceKeyPath, a, "1000"}, stdArgs...), "", true); err != nil {
-			log.Fatal(err)
-		}
-		_, err = c.waitUntilAccountInfoContains(a, "balance:", stdArgs)
+		err = c.vocliEnsureAccountHasBalance(aliceKeyPath, a, "1000", stdArgs)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -1681,6 +1670,25 @@ func testVocli(url, treasurerPrivKey string) {
 		finalTxCosts := strings.Split(strings.TrimSpace(stdout), "\n")
 		log.Infof("new tx cost: %+v", finalTxCosts)
 	}()
+}
+
+func (mainclient testClient) vocliEnsureAccountHasBalance(keyPath, account, amount string, stdArgs []string) error {
+	for i := 0; i < retries; i++ {
+		_, stdout, stderr, err := executeCommand(vocli.RootCmd, append([]string{"mint", keyPath, account, amount}, stdArgs...), "", true)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if strings.Contains(stdout, "invalid nonce") || strings.Contains(stderr, "invalid nonce") {
+			// race happened, try again
+			time.Sleep(time.Second)
+			continue
+		}
+		_, err = mainclient.waitUntilAccountInfoContains(account, "balance:", stdArgs)
+		if err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("mint failed: %s balance is still 0 (gave up after %d retries)", account, retries)
 }
 
 func (mainClient testClient) repeatCmdUntilStdoutContains(args []string, s string) (stdout string, err error) {
