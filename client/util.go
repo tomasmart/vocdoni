@@ -97,12 +97,13 @@ func (c *Client) WaitUntilProcessAvailable(pid []byte) (proc *indexertypes.Proce
 }
 
 func (c *Client) WaitUntilProcessReady(pid []byte) (proc *indexertypes.Process, err error) {
-	log.Info("waiting for the process %x to start...", pid)
+	log.Infof("waiting for the process %x to start...", pid)
 	proc, err = c.WaitUntilProcessAvailable(pid)
 	if err != nil {
 		return nil, err
 	}
 	c.WaitUntilBlock(proc.StartBlock)
+	return proc, nil
 }
 
 func (c *Client) WaitUntilEnvelopeHeight(pid []byte, height uint32, waitTimeout time.Duration,
