@@ -533,7 +533,6 @@ func mkTreeVoteTest(host string,
 	defer mainClient.Close()
 
 	// Create process
-	pid := client.Random(32)
 	log.Infof("creating process with entityID: %s", entityKey.AddressString())
 	start, pid, err := mainClient.ensureProcessCreated(
 		entityKey,
@@ -1012,7 +1011,6 @@ func cspVoteTest(
 	defer mainClient.Close()
 
 	// Create process
-	pid := client.Random(32)
 	log.Infof("creating process with entityID: %s", entityKey.AddressString())
 	start, pid, err := mainClient.ensureProcessCreated(
 		entityKey,
