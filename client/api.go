@@ -1018,29 +1018,20 @@ func (c *Client) TestSendAnonVotes(
 		}
 	}
 	log.Infof("votes submited! took %s", time.Since(start))
-	checkStart := time.Now()
-	registered := 0
-	log.Infof("waiting for votes to be validated...")
-	for {
-		time.Sleep(time.Millisecond * 500)
-		if h, err := c.GetEnvelopeHeight(pid); err != nil {
-			log.Warnf("error getting envelope height: %v", err)
-			continue
-		} else {
-			if h >= uint32(len(signers)) {
-				break
-			}
-		}
-		if time.Since(checkStart) > timeDeadLine {
-			return 0, fmt.Errorf("waiting for envelope height took longer than deadline, skipping")
-		}
+
+	err = c.WaitUntilEnvelopeHeight(pid, uint32(len(signers)), timeDeadLine)
+	if err != nil {
+		return 0, err
 	}
+
 	votingElapsedTime := time.Since(start)
 
 	if !checkNullifiers {
 		return votingElapsedTime, nil
 	}
 	// If checkNullifiers, wait until all votes have been verified
+	checkStart := time.Now()
+	registered := 0
 	for {
 		for i, nullHex := range nullifiers {
 			if nullHex == "registered" {

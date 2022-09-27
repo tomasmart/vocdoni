@@ -105,6 +105,28 @@ func (c *Client) WaitUntilProcessReady(pid []byte) (proc *indexertypes.Process, 
 	c.WaitUntilBlock(proc.StartBlock)
 }
 
+func (c *Client) WaitUntilEnvelopeHeight(pid []byte, height uint32, waitTimeout time.Duration,
+) error {
+	log.Infof("waiting for %d votes to be validated in process %x...", height, pid)
+	timeout := time.After(waitTimeout)
+	poll := time.NewTicker(pollInterval)
+	for {
+		select {
+		case <-poll.C:
+			h, err := c.GetEnvelopeHeight(pid)
+			if err != nil {
+				log.Warnf("error getting envelope height: %v", err)
+				continue
+			}
+			if h >= height {
+				return nil
+			}
+		case <-timeout:
+			return fmt.Errorf("waiting for envelope height took longer than deadline")
+		}
+	}
+}
+
 func CreateEthRandomKeysBatch(n int) []*ethereum.SignKeys {
 	s := make([]*ethereum.SignKeys, n)
 	for i := 0; i < n; i++ {
