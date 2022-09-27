@@ -83,10 +83,8 @@ func (v *State) CachePurge(height uint32) {
 	if v.cacheDisabled() {
 		return
 	}
-	// Purge only every 18 blocks (3 minute)
-	if height%18 != 0 { // TODO(pau): do not use height but time
-		return
-	}
+	// Purge every block, to exacerbate cache purging bugs
+
 	start := time.Now()
 
 	keys := v.voteCache.Keys()
@@ -111,6 +109,8 @@ func (v *State) CachePurge(height uint32) {
 			v.voteCache.Remove(cacheGetNullifierKey(vote.Nullifier))
 			v.voteCache.Remove(id)
 			removeFromMempool = append(removeFromMempool, vid)
+			log.Debugf("[txcache] purged tx %x: %d+%d >= %d", vid, vote.Height, voteCachePurgeThreshold, height)
+			log.Debugf("[txcache] purged tx %x: %+v", vid, vote)
 		}
 	}
 	if len(removeFromMempool) > 0 && v.mempoolRemoveTxKeys != nil {

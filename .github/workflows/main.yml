@@ -16,44 +16,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: gofmt
-        # Run gofmt first, as it's quick and issues are common.
-        run: diff -u <(echo -n) <(gofmt -s -d $(git ls-files '*.go'))
-      - name: go test
-        run: |
-          # check that log lines contains no invalid chars (evidence of format mismatch)
-          export LOG_PANIC_ON_INVALIDCHARS=true
-          # we run vet in another step
-          go test -vet=off -timeout=1m -coverprofile=covprofile ./...
-          # -race can easily make the crypto stuff 10x slower
-          go test -vet=off -timeout=15m -race ./...
-      - name: go vet
-        run: go vet ./...
-      - name: Download staticcheck
-        run: |
-          curl -L https://github.com/dominikh/go-tools/releases/download/2022.1.2/staticcheck_linux_amd64.tar.gz | tar -xzf -
-      - name: staticcheck
-        run: |
-          ./staticcheck/staticcheck ./... 2> staticcheck/stderr
-      - name:  check staticcheck stderr
-        run: |
-          if cat staticcheck/stderr | grep "matched no packages" ; then
-            echo "staticcheck step did nothing, due to https://github.com/vocdoni/vocdoni-node/issues/444"
-            echo "Please re-run job."
-            # seize the opportunity to fix the underlying problem: a permissions error in ~/.cache
-            epoch=$(date +%s)
-            # if any file is reported by find, grep returns true and the mv is done
-            if [ -d ~/.cache ] && find ~/.cache -not -user `id --user` -print0 | grep -qz . ; then
-              echo "~/.cache had broken permissions, moving it away... (cache will be rebuilt with usage)"
-              mv -v ~/.cache ~/.cache-broken-by-root-$epoch
-            fi
-            exit 2
-          fi
-      - name: Go build for Mac
-        run: |
-          # Some of our devs are on Mac. Ensure it builds.
-          # It's surprisingly hard with some deps like bazil.org/fuse.
-          GOOS=darwin go build ./...
+    # no-op
 
   compose-test:
     runs-on: self-hosted
@@ -72,7 +35,7 @@ jobs:
           export LOG_PANIC_ON_INVALIDCHARS=true
           cd dockerfiles/testsuite
           docker-compose build
-          ./start_test.sh
+          ./start_test.sh anonvoting
 
   docker-release:
     runs-on: self-hosted
