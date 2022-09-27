@@ -194,6 +194,8 @@ done
 }
 
 if [ -n "$failed" ]; then
+  echo "### Logs from oracle (full) ###"
+  $COMPOSE_CMD logs oracle
   echo "### Logs from failed test ($test) ###"
   cat $results/$failed.stdout
 fi
