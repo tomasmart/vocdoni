@@ -96,6 +96,15 @@ func (c *Client) WaitUntilProcessAvailable(pid []byte) (proc *indexertypes.Proce
 	}
 }
 
+func (c *Client) WaitUntilProcessReady(pid []byte) (proc *indexertypes.Process, err error) {
+	log.Info("waiting for the process %x to start...", pid)
+	proc, err = c.WaitUntilProcessAvailable(pid)
+	if err != nil {
+		return nil, err
+	}
+	c.WaitUntilBlock(proc.StartBlock)
+}
+
 func CreateEthRandomKeysBatch(n int) []*ethereum.SignKeys {
 	s := make([]*ethereum.SignKeys, n)
 	for i := 0; i < n; i++ {

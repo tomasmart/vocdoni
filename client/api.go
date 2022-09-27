@@ -714,8 +714,13 @@ func (c *Client) TestSendVotes(
 	// Wait until all gateway connections are ready
 	wg.Done()
 	log.Infof("%s is waiting other gateways to be ready before it can start voting", c.Addr)
-	c.WaitUntilBlock(startBlock + 2)
 	wg.Wait()
+
+	// Wait for process to actually start
+	_, err = c.WaitUntilProcessReady(pid)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Get encryption keys
 	keyIndexes := []uint32{}
@@ -900,8 +905,13 @@ func (c *Client) TestSendAnonVotes(
 	// Wait until all gateway connections are ready
 	wg.Done()
 	log.Infof("%s is waiting other gateways to be ready before it can start voting", c.Addr)
-	c.WaitUntilBlock(startBlock)
 	wg.Wait()
+
+	// Wait for process to actually start
+	_, err = c.WaitUntilProcessReady(pid)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	log.Infof("Downloading Circuit Artifacts")
 	circuitConfig.LocalDir = "/tmp"

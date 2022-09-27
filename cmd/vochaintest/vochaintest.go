@@ -882,7 +882,7 @@ func mkTreeAnonVoteTest(host string,
 	// End of pre-registration.  Now we do the voting step with a SNARK
 	//
 
-	proc, err := mainClient.GetProcessInfo(pid)
+	proc, err := mainClient.WaitUntilProcessAvailable(pid)
 	if err != nil {
 		log.Fatal(err)
 	}
