@@ -222,6 +222,7 @@ func (r *RPCAPI) getProcessKeys(request *api.APIrequest) (*api.APIresponse, erro
 		return nil, fmt.Errorf("cannot get envelope status: (malformed processId)")
 	}
 	process, err := r.vocapp.State.Process(request.ProcessID, true)
+	log.Warnf("getProcessKeys: process: %+v err: %v", process, err)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get process encryption public keys: %w", err)
 	}

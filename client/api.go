@@ -176,6 +176,7 @@ func (c *Client) GetKeys(pid, eid []byte) (*pkeys, error) {
 	req.ProcessID = pid
 	req.EntityId = eid
 	resp, err := c.Request(req, nil)
+	log.Warnf("GetKeys: resp: %+v err: %v", resp, err)
 	if err != nil {
 		return nil, err
 	}
