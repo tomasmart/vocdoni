@@ -133,6 +133,39 @@ func (c *Client) WaitUntilEnvelopeHeight(pid []byte, height uint32, waitTimeout 
 	}
 }
 
+func (c *Client) WaitUntilProcessKeys(pid, eid []byte,
+) (keys []string, keyIndexes []uint32, err error) {
+	log.Infof("waiting for keys from process %x...", pid)
+	timeout := time.After(waitTimeout)
+	poll := time.NewTicker(pollInterval)
+	for {
+		select {
+		case <-poll.C:
+			pk, err := c.GetKeys(pid, eid)
+			if err != nil || pk == nil {
+				log.Errorf("WaitUntilProcessKeys(%x): %v", pid, err)
+				continue
+			}
+			keys = nil
+			keyIndexes = nil
+			for _, k := range pk.pub {
+				if len(k.Key) > 0 {
+					keys = append(keys, k.Key)
+					keyIndexes = append(keyIndexes, uint32(k.Idx))
+				}
+			}
+			if len(keys) > 0 {
+				log.Infof("process %x got encryption keys!", pid)
+				return keys, keyIndexes, nil
+			}
+			log.Infof("waiting... process keys still empty: %v", pk)
+		case <-timeout:
+			return nil, nil, fmt.Errorf("waiting for keys from process %x took longer than %s",
+				pid, waitTimeout)
+		}
+	}
+}
+
 func CreateEthRandomKeysBatch(n int) []*ethereum.SignKeys {
 	s := make([]*ethereum.SignKeys, n)
 	for i := 0; i < n; i++ {
