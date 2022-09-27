@@ -716,11 +716,14 @@ func (c *Client) TestSendVotes(
 	log.Infof("%s is waiting other gateways to be ready before it can start voting", c.Addr)
 	wg.Wait()
 
-	// Wait for process to actually start
-	_, err = c.WaitUntilProcessReady(pid)
+	// Wait for process to be registered
+	p, err := c.WaitUntilProcessAvailable(pid)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// and then wait until StartBlock + 1, for keys to be generated
+	c.WaitUntilBlock(p.StartBlock + 1)
 
 	// Get encryption keys
 	keyIndexes := []uint32{}
