@@ -522,17 +522,11 @@ func (c *Client) TestPreRegisterKeys(
 	wg.Wait()
 
 	// Wait for process to be registered
-	log.Infof("waiting for process %x to be registered...", pid)
-	for {
-		proc, err := c.GetProcessInfo(pid)
-		if err != nil {
-			log.Infof("Process not yet available: %v", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		log.Infof("Process: %+v\n", proc)
-		break
+	_, err = c.WaitUntilProcessAvailable(pid)
+	if err != nil {
+		log.Fatal(err)
 	}
+
 	cb, err := c.GetCurrentBlock()
 	if err != nil {
 		return 0, err
@@ -677,7 +671,7 @@ func (c *Client) TestPreRegisterKeys(
 		if weight.String() == registerKeyWeight {
 			break
 		}
-		time.Sleep(4 * time.Second)
+		c.WaitUntilNextBlock()
 	}
 	if tries == 0 {
 		return 0, fmt.Errorf("could not get pre-register key")
@@ -1145,14 +1139,11 @@ func (c *Client) CreateProcess(
 		return 0, nil, nil, fmt.Errorf("cannot decode process ID: %x", resp.Payload)
 	}
 	if startBlockIncrement == 0 {
-		for i := 0; i < 10; i++ {
-			time.Sleep(2 * time.Second)
-			p, err := c.GetProcessInfo(processID)
-			if err == nil && p != nil {
-				return p.StartBlock, processID, resp.Hash, nil
-			}
+		p, err := c.WaitUntilProcessAvailable(processID)
+		if err != nil || p == nil {
+			return 0, nil, nil, fmt.Errorf("process not created: %w", err)
 		}
-		return 0, nil, nil, fmt.Errorf("process was not created")
+		return p.StartBlock, processID, resp.Hash, nil
 	}
 	return startBlock, processID, resp.Hash, nil
 }

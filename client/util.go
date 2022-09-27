@@ -13,6 +13,7 @@ import (
 	"go.vocdoni.io/dvote/log"
 	"go.vocdoni.io/dvote/types"
 	"go.vocdoni.io/dvote/vochain"
+	"go.vocdoni.io/dvote/vochain/scrutinizer/indexertypes"
 )
 
 const (
@@ -57,7 +58,7 @@ func (c *Client) WaitUntilNextBlock() {
 }
 
 func (c *Client) WaitUntilTxMined(txhash types.HexBytes) error {
-	log.Infof("waiting for tx %x (checking every %s)", txhash, pollInterval)
+	log.Infof("waiting for tx %x...", txhash)
 	timeout := time.After(waitTimeout)
 	poll := time.NewTicker(pollInterval)
 	defer poll.Stop()
@@ -71,6 +72,26 @@ func (c *Client) WaitUntilTxMined(txhash types.HexBytes) error {
 			}
 		case <-timeout:
 			return fmt.Errorf("WaitUntilTxMined(%x) timed out after %s", txhash, waitTimeout)
+		}
+	}
+}
+
+func (c *Client) WaitUntilProcessAvailable(pid []byte) (proc *indexertypes.Process, err error) {
+	log.Infof("waiting for process %x to be registered...", pid)
+	timeout := time.After(waitTimeout)
+	poll := time.NewTicker(pollInterval)
+	defer poll.Stop()
+	for {
+		select {
+		case <-poll.C:
+			proc, err = c.GetProcessInfo(pid)
+			if err == nil {
+				log.Infof("found process %x", pid)
+				return proc, nil
+			}
+		case <-timeout:
+			return nil, fmt.Errorf("WaitUntilProcessAvailable(%x) timed out after %s (%w)",
+				pid, waitTimeout, err)
 		}
 	}
 }

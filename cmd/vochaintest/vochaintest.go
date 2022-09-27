@@ -327,7 +327,7 @@ func (mainClient testClient) ensureProcessCreated(
 	retries int,
 ) (uint32, []byte, error) {
 	for i := 0; i < retries; i++ {
-		start, pid, txhash, err := mainClient.CreateProcess(
+		start, pid, _, err := mainClient.CreateProcess(
 			signer,
 			entityID.Bytes(),
 			censusRoot,
@@ -340,15 +340,13 @@ func (mainClient testClient) ensureProcessCreated(
 			maxCensusSize)
 		if err != nil {
 			log.Warnf("CreateProcess: %v", err)
-			time.Sleep(client.TimeBetweenBlocks)
+			mainClient.WaitUntilNextBlock()
 			continue
 		}
 
-		_ = mainClient.WaitUntilTxMined(txhash)
-
-		p, err := mainClient.GetProcessInfo(pid)
+		p, err := mainClient.WaitUntilProcessAvailable(pid)
 		if err != nil {
-			log.Infof("ensureProcessCreated: process %x not yet available ... (%s)", pid, err)
+			log.Infof("ensureProcessCreated: process %x not yet available: %s", pid, err)
 			continue
 		}
 		log.Infof("ensureProcessCreated: got process %x info %+v", pid, p)
@@ -362,6 +360,7 @@ func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, proce
 		p, err := mainClient.GetProcessInfo(processID)
 		if err != nil {
 			log.Warnf("ensureProcessEnded: cannot force end process: cannot get process %x info: %s", processID, err.Error())
+			mainClient.WaitUntilNextBlock()
 			continue
 		}
 		log.Infof("ensureProcessEnded: got process %x info %+v", processID, p)
@@ -369,13 +368,13 @@ func (mainClient testClient) ensureProcessEnded(signer *ethereum.SignKeys, proce
 			return nil
 		}
 
-		txhash, err := mainClient.EndProcess(signer, processID)
+		_, err = mainClient.EndProcess(signer, processID)
 		if err != nil {
-			time.Sleep(client.TimeBetweenBlocks)
+			log.Warnf("EndProcess(%x): %v", processID, err)
+			mainClient.WaitUntilNextBlock()
 			continue
 		}
-
-		_ = mainClient.WaitUntilTxMined(txhash)
+		mainClient.WaitUntilNextBlock()
 	}
 	return fmt.Errorf("ensureProcessEnded: process could not be ended after %d retries", retries)
 }
@@ -887,7 +886,7 @@ func mkTreeAnonVoteTest(host string,
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Infof("Process: %+v\n", proc)
+	log.Infof("Process: %+v", proc)
 	rollingCensusRoot := proc.RollingCensusRoot
 
 	// Send votes
