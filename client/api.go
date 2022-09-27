@@ -797,6 +797,13 @@ func (c *Client) TestSendVotes(
 		log.Debugf("voting with pubKey:%s {%s}", pub, log.FormatProto(v))
 		resp, err := c.Request(req, nil)
 		if err != nil {
+			if strings.HasSuffix(err.Error(), "EOF") {
+				// not fatal, just try again
+				log.Warn(err)
+				time.Sleep(1 * time.Second)
+				i--
+				continue
+			}
 			return 0, err
 		}
 		if !resp.Ok {
