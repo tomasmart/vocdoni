@@ -110,6 +110,7 @@ func (c *Client) WaitUntilEnvelopeHeight(pid []byte, height uint32, waitTimeout 
 	log.Infof("waiting for %d votes to be validated in process %x...", height, pid)
 	timeout := time.After(waitTimeout)
 	poll := time.NewTicker(pollInterval)
+	var lasth uint32
 	for {
 		select {
 		case <-poll.C:
@@ -121,8 +122,12 @@ func (c *Client) WaitUntilEnvelopeHeight(pid []byte, height uint32, waitTimeout 
 			if h >= height {
 				return nil
 			}
+			if h > lasth {
+				log.Infof("process %x envelope height: %d (want %d)", pid, h, height)
+				lasth = h
+			}
 		case <-timeout:
-			return fmt.Errorf("waiting for envelope height took longer than deadline")
+			return fmt.Errorf("waiting for envelope height took longer than %s", waitTimeout)
 		}
 	}
 }
