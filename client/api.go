@@ -1019,6 +1019,7 @@ func (c *Client) TestSendAnonVotes(
 	checkStart := time.Now()
 	registered := 0
 	log.Infof("waiting for votes to be validated...")
+	var lasth uint32
 	for {
 		time.Sleep(time.Millisecond * 500)
 		if h, err := c.GetEnvelopeHeight(pid); err != nil {
@@ -1027,6 +1028,10 @@ func (c *Client) TestSendAnonVotes(
 		} else {
 			if h >= uint32(len(signers)) {
 				break
+			}
+			if h > lasth {
+				log.Infof("process %x envelope height: %d (want %d)", pid, h, uint32(len(signers)))
+				lasth = h
 			}
 		}
 		if time.Since(checkStart) > timeDeadLine {
