@@ -813,6 +813,7 @@ func (c *Client) TestSendVotes(
 				log.Warnf("mempool is full, waiting and retrying")
 				time.Sleep(1 * time.Second)
 				i--
+				continue
 			} else {
 				return 0, fmt.Errorf("%s failed: %s", req.Method, resp.Message)
 			}
@@ -839,13 +840,13 @@ func (c *Client) TestSendVotes(
 	log.Infof("waiting for votes to be validated...")
 	for {
 		time.Sleep(time.Millisecond * 500)
-		if h, err := c.GetEnvelopeHeight(pid); err != nil {
+		h, err := c.GetEnvelopeHeight(pid)
+		if err != nil {
 			log.Warnf("error getting envelope height: %v", err)
 			continue
-		} else {
-			if h >= uint32(len(signers)) {
-				break
-			}
+		}
+		if h >= uint32(len(signers)) {
+			break
 		}
 		if time.Since(checkStart) > timeDeadLine {
 			return 0, fmt.Errorf("waiting for envelope height took longer than deadline, skipping")
