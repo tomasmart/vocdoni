@@ -1073,9 +1073,9 @@ func (c *Client) CreateProcess(
 ) (startBlock uint32, processID []byte, txHash types.HexBytes, err error) {
 	// if envelopeType.EncryptedVotes is true, process keys are going to be generated
 	// and need to be added in a separate tx BEFORE the process is started.
-	// one more block avoids a race condition https://github.com/vocdoni/vocdoni-node/issues/299
-	if startBlockIncrement == 0 && envelopeType.EncryptedVotes {
-		startBlockIncrement++
+	// a few more blocks avoid a race condition https://github.com/vocdoni/vocdoni-node/issues/299
+	if startBlockIncrement < 5 && envelopeType.EncryptedVotes {
+		startBlockIncrement = 5
 	}
 
 	if startBlockIncrement > 0 {
