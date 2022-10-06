@@ -158,6 +158,19 @@ func NewScrutinizer(dbPath string, app *vochain.BaseApplication, countLiveResult
 	return s, nil
 }
 
+func (s *Scrutinizer) Close() error {
+	// Try closing both before reporting errors.
+	err1 := s.db.Close()
+	err2 := s.sqlDB.Close()
+	if err1 != nil {
+		return err1
+	}
+	if err2 != nil {
+		return err2
+	}
+	return nil
+}
+
 func (s *Scrutinizer) timeoutQueries() (*scrutinizerdb.Queries, context.Context, context.CancelFunc) {
 	ctx := context.TODO()
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
